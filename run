@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+unset JAVA_HOME
+exec ./build/install/CMSC124-Interpreter/bin/CMSC124-Interpreter "$@"
