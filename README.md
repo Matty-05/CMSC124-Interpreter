@@ -1,4 +1,4 @@
-# To Be Determined
+# Nier
 
 ## Creators
 
@@ -30,7 +30,7 @@ Exit codes: 0 when the program runs to completion without error, 65 when the sca
 
 ## File extension
 
-`.src` — matches the `ext` field in every `tests/lab*/manifest.json`.
+`.mata` — matches the `ext` field in every `tests/lab*/manifest.json`.
 
 ## Lexical structure
 
