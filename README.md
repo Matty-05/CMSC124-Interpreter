@@ -124,16 +124,33 @@ are a common source of line-counting bugs.
 
 ## Whitespace and termination
 
-- Whitespace significant: [yes or no, and where]
-- Statement terminator: [e.g. semicolon, newline, none]
-- Block delimiters: [e.g. braces, indentation]
-- Grouping delimiters: [e.g. parentheses]
+- Whitespace significant: no. Spaces, tabs, and carriage returns are discarded
+  by the scanner. Newlines are discarded as tokens but counted, so that every
+  token carries an honest line number.
+- Statement terminator: a newline. There are no semicolons.
+- Block delimiters: braces, `{` and `}`.
+- Grouping delimiters: parentheses, `(` and `)`.
+
+Nier is bracketed rather than indentation-sensitive, so the scanner never needs
+to emit synthetic indent or dedent tokens and never has to track a stack of
+indentation levels.
 
 ## Token output format
 
 ```
-[one line of real --tokenize output]
+Token(type=NUMBER, lexeme=4, literal=4.0, line=1)
 ```
+
+One token per line. The fields are:
+
+- `type` — the token type, drawn from the list in the lexical structure section
+- `lexeme` — the exact source text the token was scanned from
+- `literal` — the value the lexeme denotes, or `null` for tokens that carry no
+  value, such as keywords and operators
+- `line` — the 1-based line number the lexeme began on
+
+Frozen as of Lab 1. Any change is recorded in the changelog, since every
+committed `.expected` file is compared against this format byte for byte.
 
 [What each field means. Frozen as of Lab 1; changes are recorded in the
 changelog.]
