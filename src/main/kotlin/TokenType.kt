@@ -6,7 +6,7 @@ enum class TokenType {
 
     // one or two character tokens
     EQUAL, EQUAL_EQUAL,
-    BANG, BANG_EQUAL,
+    BANG_EQUAL,
     LESS, LESS_EQUAL,
     GREATER, GREATER_EQUAL,
 
