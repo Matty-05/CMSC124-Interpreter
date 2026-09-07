@@ -7,7 +7,7 @@
 
 ## Overview
 
-To be implemented.
+Nier is a programming language designed for YoRHa androids and other operators who wish to test their combat protocols without the risk of losing a unit in the field should their routines go wrong. The language acts like a virtual Bunker terminal, producing an output that shows what would happen should the protocol they wrote actually be transmitted to a live android. It uses terms and concepts an operator would be familiar with in their day-to-day work. Values are stored in units (variables), results come back through report (print), control returns through transmit (return), and reusable behavior is packaged into protocols (functions).
 
 ## Host language and build
 
@@ -22,11 +22,11 @@ To be implemented.
 |---|---|
 | `./run <file>` | Executes a program. Available from Lab 4. |
 | `./run --tokenize <file>` | Prints the token stream. |
-| `./run --parse <file>` | Prints the parsed tree. |
-| `./run --eval <file>` | Evaluates each expression and prints its value. |
+| `./run --parse <file>` | Prints the parsed tree. Available from Lab 2. |
+| `./run --eval <file>` | Evaluates each expression and prints its value. Available from Lab 3. |
 | `./run` | Starts the REPL. |
 
-Exit codes: 0 when the program runs to completion without error, 65 when the scanner or parser rejects the input with a lexical or syntax error, 70 when evaluation of a successfully parsed program fails with a runtime error.
+Exit codes: 0 when the file scans cleanly, 65 when the scanner rejects it with a lexical error, 70 when a successfully parsed program fails during evaluation.
 
 ## File extension
 
@@ -38,50 +38,119 @@ Exit codes: 0 when the program runs to completion without error, 65 when the sca
 
 | Keyword | Purpose |
 |---|---|
-| [word] | [what it does] |
+| `unit` | Declares a variable |
+| `report` | Prints a value to standard output |
+| `protocol` | Declares a function |
+| `transmit` | Returns a value from a function |
+| `active` | Boolean true |
+| `inactive` | Boolean false |
+| `void` | The absence of a value |
+| `if` | Conditional branch |
+| `else` | Alternative branch of a conditional |
+| `while` | Loop while a condition holds |
+| `for` | Counted loop |
+| `and` | Logical conjunction |
+| `or` | Logical disjunction |
+| `not` | Logical negation |
+
+Every word here is a word a user cannot use as a variable name, so the list is
+kept deliberately small. Keywords are reserved in all contexts.
 
 ### Operators
 
 | Operator | Category | Operands | Associativity | Precedence |
 |---|---|---|---|---|
-| [op] | [arithmetic, comparison, logical, assignment, other] | [unary or binary] | [left, right, none] | [1 = loosest] |
+| `=` | assignment | binary | — | — |
+| `or` | logical | binary | — | — |
+| `and` | logical | binary | — | — |
+| `==` | equality | binary | — | — |
+| `!=` | equality | binary | — | — |
+| `<` | comparison | binary | — | — |
+| `<=` | comparison | binary | — | — |
+| `>` | comparison | binary | — | — |
+| `>=` | comparison | binary | — | — |
+| `+` | arithmetic | binary | — | — |
+| `-` | arithmetic | binary | — | — |
+| `*` | arithmetic | binary | — | — |
+| `/` | arithmetic | binary | — | — |
+| `not` | logical | unary | — | — |
+| `-` | arithmetic negation | unary | — | — |
+
+Category and operand count are settled as of Lab 1. Associativity (left, right,
+or none) and precedence (1 = loosest) are filled in for Lab 2, when the grammar
+has to encode them in how its rules delegate to each other.
+
+`-` appears twice, as binary subtraction and as unary negation. The scanner
+emits the same `MINUS` token for both. Distinguishing them is the parser's
+responsibility.
 
 ### Literals
 
 | Kind | Syntax | Produces |
 |---|---|---|
-| [number] | [e.g. 42, 3.14] | [what runtime value] |
-| [string] | [e.g. "hello", escapes supported] | [what runtime value] |
-| [boolean] | [true, false] | [what runtime value] |
-| [nil] | [spelling] | [what runtime value] |
+| Number | `42`, `3.14` | A numeric value. Integers and decimals are both supported. A leading dot (`.5`) and a trailing dot (`3.`) are not valid numbers. |
+| String | `"hello"` | A text value. Double quotes only. Escape sequences are supported. A string may not span lines. |
+| Boolean | `active`, `inactive` | A truth value. |
+| Nil | `void` | The absence of a value. |
+
+Supported escape sequences: `\n` (newline), `\t` (tab), `\"` (double quote), and
+`\\` (backslash). The lexeme keeps the backslash as written; the literal holds
+the character it denotes.
+
+A newline inside a string literal is a lexical error rather than part of the
+string.
 
 ### Identifiers
 
-- Start characters: [which]
-- Continue characters: [which]
-- Case-sensitive: [yes or no]
-- [Reserved patterns, length limits, or other restrictions.]
+- Start characters: an ASCII letter (`a`–`z`, `A`–`Z`) or an underscore (`_`)
+- Continue characters: an ASCII letter, a digit (`0`–`9`), or an underscore
+- Case-sensitive: yes. `count` and `Count` are different names.
+- An identifier may not be one of the reserved keywords listed above. Words that
+  merely begin with a keyword are ordinary identifiers, so `unitary` is a valid
+  identifier and not `unit` followed by `ary`.
 
 ### Comments
 
-- Line comments: [token]
-- Block comments: [tokens, or "not supported"]
-- Nesting: [supported or not]
-- [Harness note: comment_prefix in tests/lab*/manifest.json is set to the
-  token above.]
+- Line comments: `#`, which discards the rest of the line
+- Block comments: not supported
+- Nesting: not applicable
+- A comment may appear at the end of a line of code, as in `unit x = 4  # note`
+- Comments are discarded by the scanner and never emitted as tokens
+- The harness note: `comment_prefix` in `tests/lab*/manifest.json` is set to `#`.
+
+Block comments were cut to keep the scanner's comment handling to a single
+case. Nested block comments in particular require tracking a depth counter and
+are a common source of line-counting bugs.
 
 ## Whitespace and termination
 
-- Whitespace significant: [yes or no, and where]
-- Statement terminator: [e.g. semicolon, newline, none]
-- Block delimiters: [e.g. braces, indentation]
-- Grouping delimiters: [e.g. parentheses]
+- Whitespace significant: no. Spaces, tabs, and carriage returns are discarded
+  by the scanner. Newlines are discarded as tokens but counted, so that every
+  token carries an honest line number.
+- Statement terminator: a newline. There are no semicolons.
+- Block delimiters: braces, `{` and `}`.
+- Grouping delimiters: parentheses, `(` and `)`.
+
+Nier is bracketed rather than indentation-sensitive, so the scanner never needs
+to emit synthetic indent or dedent tokens and never has to track a stack of
+indentation levels.
 
 ## Token output format
 
 ```
-[one line of real --tokenize output]
+Token(type=NUMBER, lexeme=4, literal=4.0, line=1)
 ```
+
+One token per line. The fields are:
+
+- `type` — the token type, drawn from the list in the lexical structure section
+- `lexeme` — the exact source text the token was scanned from
+- `literal` — the value the lexeme denotes, or `null` for tokens that carry no
+  value, such as keywords and operators
+- `line` — the 1-based line number the lexeme began on
+
+Frozen as of Lab 1. Any change is recorded in the changelog, since every
+committed `.expected` file is compared against this format byte for byte.
 
 [What each field means. Frozen as of Lab 1; changes are recorded in the
 changelog.]
