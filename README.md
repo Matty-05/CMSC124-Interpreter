@@ -88,25 +88,39 @@ responsibility.
 
 | Kind | Syntax | Produces |
 |---|---|---|
-| [number] | [e.g. 42, 3.14] | [what runtime value] |
-| [string] | [e.g. "hello", escapes supported] | [what runtime value] |
-| [boolean] | [true, false] | [what runtime value] |
-| [nil] | [spelling] | [what runtime value] |
+| Number | `42`, `3.14` | A numeric value. Integers and decimals are both supported. A leading dot (`.5`) and a trailing dot (`3.`) are not valid numbers. |
+| String | `"hello"` | A text value. Double quotes only. Escape sequences are supported. A string may not span lines. |
+| Boolean | `active`, `inactive` | A truth value. |
+| Nil | `void` | The absence of a value. |
+
+Supported escape sequences: `\n` (newline), `\t` (tab), `\"` (double quote), and
+`\\` (backslash). The lexeme keeps the backslash as written; the literal holds
+the character it denotes.
+
+A newline inside a string literal is a lexical error rather than part of the
+string.
 
 ### Identifiers
 
-- Start characters: [which]
-- Continue characters: [which]
-- Case-sensitive: [yes or no]
-- [Reserved patterns, length limits, or other restrictions.]
+- Start characters: an ASCII letter (`a`–`z`, `A`–`Z`)
+- Continue characters: an ASCII letter or a digit (`0`–`9`)
+- Case-sensitive: yes. `count` and `Count` are different names.
+- An identifier may not be one of the reserved keywords listed above. Words that
+  merely begin with a keyword are ordinary identifiers, so `unitary` is a valid
+  identifier and not `unit` followed by `ary`.
 
 ### Comments
 
-- Line comments: [token]
-- Block comments: [tokens, or "not supported"]
-- Nesting: [supported or not]
-- [Harness note: comment_prefix in tests/lab*/manifest.json is set to the
-  token above.]
+- Line comments: `#`, which discards the rest of the line
+- Block comments: not supported
+- Nesting: not applicable
+- A comment may appear at the end of a line of code, as in `unit x = 4  # note`
+- Comments are discarded by the scanner and never emitted as tokens
+- The harness note: `comment_prefix` in `tests/lab*/manifest.json` is set to `#`.
+
+Block comments were cut to keep the scanner's comment handling to a single
+case. Nested block comments in particular require tracking a depth counter and
+are a common source of line-counting bugs.
 
 ## Whitespace and termination
 
