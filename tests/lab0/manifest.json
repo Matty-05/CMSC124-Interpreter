@@ -1,5 +1,5 @@
 {
-  "ext": ".src",
+  "ext": ".mata",
   "mode": "sidecar",
   "run_entrypoint": "./run"
 }
