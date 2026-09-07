@@ -78,6 +78,7 @@ class Scanner(private val source: String) {
             '>' -> addToken(if (match('=')) TokenType.GREATER_EQUAL else TokenType.GREATER)
             ',' -> addToken(TokenType.COMMA)
             '.' -> addToken(TokenType.DOT)
+            ':' -> addToken(TokenType.COLON)
 
             '/' -> {
                 if (match('/')) {
