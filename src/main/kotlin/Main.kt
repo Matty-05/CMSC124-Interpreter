@@ -35,9 +35,6 @@ fun runPrompt() {
         if (line.trim().lowercase() in listOf("exit", "quit")) break
         ErrorReporter.hadError = false
         run(line)
-        if (ErrorReporter.hadError) {
-            exitProcess(65)  
-        }
     }
 }
 
