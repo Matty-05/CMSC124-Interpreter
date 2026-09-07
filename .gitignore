@@ -1,3 +1,4 @@
 build/
 .gradle/
 scanner.jar
+run_tests.py
