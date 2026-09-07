@@ -38,13 +38,51 @@ Exit codes: 0 when the file scans cleanly, 65 when the scanner rejects it with a
 
 | Keyword | Purpose |
 |---|---|
-| [word] | [what it does] |
+| `unit` | Declares a variable |
+| `report` | Prints a value to standard output |
+| `protocol` | Declares a function |
+| `transmit` | Returns a value from a function |
+| `active` | Boolean true |
+| `inactive` | Boolean false |
+| `void` | The absence of a value |
+| `if` | Conditional branch |
+| `else` | Alternative branch of a conditional |
+| `while` | Loop while a condition holds |
+| `for` | Counted loop |
+| `and` | Logical conjunction |
+| `or` | Logical disjunction |
+| `not` | Logical negation |
+
+Every word here is a word a user cannot use as a variable name, so the list is
+kept deliberately small. Keywords are reserved in all contexts.
 
 ### Operators
 
 | Operator | Category | Operands | Associativity | Precedence |
 |---|---|---|---|---|
-| [op] | [arithmetic, comparison, logical, assignment, other] | [unary or binary] | [left, right, none] | [1 = loosest] |
+| `=` | assignment | binary | — | — |
+| `or` | logical | binary | — | — |
+| `and` | logical | binary | — | — |
+| `==` | equality | binary | — | — |
+| `!=` | equality | binary | — | — |
+| `<` | comparison | binary | — | — |
+| `<=` | comparison | binary | — | — |
+| `>` | comparison | binary | — | — |
+| `>=` | comparison | binary | — | — |
+| `+` | arithmetic | binary | — | — |
+| `-` | arithmetic | binary | — | — |
+| `*` | arithmetic | binary | — | — |
+| `/` | arithmetic | binary | — | — |
+| `not` | logical | unary | — | — |
+| `-` | arithmetic negation | unary | — | — |
+
+Category and operand count are settled as of Lab 1. Associativity (left, right,
+or none) and precedence (1 = loosest) are filled in for Lab 2, when the grammar
+has to encode them in how its rules delegate to each other.
+
+`-` appears twice, as binary subtraction and as unary negation. The scanner
+emits the same `MINUS` token for both. Distinguishing them is the parser's
+responsibility.
 
 ### Literals
 
