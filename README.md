@@ -7,7 +7,7 @@
 
 ## Overview
 
-To be implemented.
+Nier is a programming language designed for YoRHa androids and other operators who wish to test their combat protocols without the risk of losing a unit in the field should their routines go wrong. The language acts like a virtual Bunker terminal, producing an output that shows what would happen should the protocol they wrote actually be transmitted to a live android. It uses terms and concepts an operator would be familiar with in their day-to-day work. Values are stored in units (variables), results come back through report (print), control returns through transmit (return), and reusable behavior is packaged into protocols (functions).
 
 ## Host language and build
 
@@ -20,11 +20,13 @@ To be implemented.
 
 | Command | What it does |
 |---|---|
-| `./run --tokenize <file>` | Prints the token stream for one source file. |
-| `./run` | Starts the REPL; scans each line entered and prints its tokens. |
-| `./run <file>` | Executes a program. Not implemented until Lab 4. |
+| `./run <file>` | Executes a program. Available from Lab 4. |
+| `./run --tokenize <file>` | Prints the token stream. |
+| `./run --parse <file>` | Prints the parsed tree. |
+| `./run --eval <file>` | Evaluates each expression and prints its value. |
+| `./run` | Starts the REPL. |
 
-Exit codes: 0 when the file scans cleanly, 65 when the scanner rejects it with a lexical error.
+Exit codes: 0 when the file scans cleanly, 65 when the scanner rejects it with a lexical error, 70 when a successfully parsed program fails during evaluation.
 
 ## File extension
 
