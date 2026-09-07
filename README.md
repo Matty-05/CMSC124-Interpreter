@@ -22,8 +22,8 @@ Nier is a programming language designed for YoRHa androids and other operators w
 |---|---|
 | `./run <file>` | Executes a program. Available from Lab 4. |
 | `./run --tokenize <file>` | Prints the token stream. |
-| `./run --parse <file>` | Prints the parsed tree. |
-| `./run --eval <file>` | Evaluates each expression and prints its value. |
+| `./run --parse <file>` | Prints the parsed tree. Available from Lab 2. |
+| `./run --eval <file>` | Evaluates each expression and prints its value. Available from Lab 3. |
 | `./run` | Starts the REPL. |
 
 Exit codes: 0 when the file scans cleanly, 65 when the scanner rejects it with a lexical error, 70 when a successfully parsed program fails during evaluation.
