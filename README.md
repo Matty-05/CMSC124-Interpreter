@@ -283,4 +283,4 @@ approval of your own work.]
 
 | Activity | What changed in the language |
 |---|---|
-| Lab 1 | [entry] |
+| Lab 1 | Nier defined: 14 keywords, brace-delimited blocks, newline statement termination, `#` line comments, double-quoted strings with escapes and no line spanning, integer and decimal numbers with no leading or trailing dot, letter-or-underscore identifiers. Logical negation is the `not` keyword. A bare `!` is a lexical error. Token output format frozen. |
