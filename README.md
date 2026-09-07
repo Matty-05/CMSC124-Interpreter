@@ -14,19 +14,17 @@ To be implemented.
 - Host language: Kotlin 2.0.20, targeting the JVM (Java 21)
 - Version metadata: `build.gradle.kts` (pins the Kotlin plugin version); Gradle 8.10.2 is pinned in `gradle/wrapper/gradle-wrapper.properties`
 - Build: `./build.sh`
-- A fresh clone needs a JDK 21 installation and nothing else; the Gradle wrapper fetches Gradle and the Kotlin compiler on first build. Run `chmod +x build.sh run gradlew` before building, then `./build.sh`, which runs `./gradlew installDist` and produces the launcher at `build/install/CMSC124-Interpreter/bin/CMSC124-Interpreter` that `./run` invokes.
+- A fresh clone needs a JDK 21 installation and nothing else; the Gradle wrapper fetches Gradle and the Kotlin compiler on first build. Run `chmod +x build.sh run gradlew` before building, then `./build.sh`, which runs `./gradlew installDist` and produces the launcher at `build/install/cmsc124/bin/cmsc124` that `./run` invokes.
 
 ## Running it
 
 | Command | What it does |
 |---|---|
-| `./run <file>` | Executes a program. Available from Lab 4. |
-| `./run --tokenize <file>` | Prints the token stream. |
-| `./run --parse <file>` | Prints the parsed tree. |
-| `./run --eval <file>` | Evaluates each expression and prints its value. |
-| `./run` | Starts the REPL. |
+| `./run --tokenize <file>` | Prints the token stream for one source file. |
+| `./run` | Starts the REPL; scans each line entered and prints its tokens. |
+| `./run <file>` | Executes a program. Not implemented until Lab 4. |
 
-Exit codes: 0 when the program runs to completion without error, 65 when the scanner or parser rejects the input with a lexical or syntax error, 70 when evaluation of a successfully parsed program fails with a runtime error.
+Exit codes: 0 when the file scans cleanly, 65 when the scanner rejects it with a lexical error.
 
 ## File extension
 
