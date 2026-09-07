@@ -14,7 +14,7 @@ Nier is a programming language designed for YoRHa androids and other operators w
 - Host language: Kotlin 2.0.20, targeting the JVM (Java 21)
 - Version metadata: `build.gradle.kts` (pins the Kotlin plugin version); Gradle 8.10.2 is pinned in `gradle/wrapper/gradle-wrapper.properties`
 - Build: `./build.sh`
-- A fresh clone needs a JDK 21 installation and nothing else; the Gradle wrapper fetches Gradle and the Kotlin compiler on first build. Run `chmod +x build.sh run gradlew` before building, then `./build.sh`, which runs `./gradlew installDist` and produces the launcher at `build/install/cmsc124/bin/cmsc124` that `./run` invokes.
+- A fresh clone needs a JDK 21 installation and nothing else; the Gradle wrapper fetches Gradle and the Kotlin compiler on first build. Run `chmod +x build.sh run gradlew` before building, then `./build.sh`, which runs `./gradlew installDist` and produces the launcher at `build/install/CMSC124-Interpreter/bin/CMSC124-Interpreter` that `./run` invokes.
 
 ## Running it
 
@@ -102,8 +102,8 @@ string.
 
 ### Identifiers
 
-- Start characters: an ASCII letter (`a`–`z`, `A`–`Z`)
-- Continue characters: an ASCII letter or a digit (`0`–`9`)
+- Start characters: an ASCII letter (`a`–`z`, `A`–`Z`) or an underscore (`_`)
+- Continue characters: an ASCII letter, a digit (`0`–`9`), or an underscore
 - Case-sensitive: yes. `count` and `Count` are different names.
 - An identifier may not be one of the reserved keywords listed above. Words that
   merely begin with a keyword are ordinary identifiers, so `unitary` is a valid
