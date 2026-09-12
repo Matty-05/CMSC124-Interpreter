@@ -90,8 +90,8 @@ class Scanner(private val source: String) {
             ' ', '\r', '\t' -> {  }
             '\n' -> line++
 
-            '"' -> string()
-
+            '"' -> string()  
+ 
             else -> {
                 when {
                     c.isDigit() -> number()
@@ -128,7 +128,26 @@ class Scanner(private val source: String) {
         val sb = StringBuilder()
         while (peek() != '"' && !isAtEnd()) {
             if (peek() == '\n') line++
-            sb.append(advance())
+            if (peek() == '\\') {
+                advance()
+
+                if (isAtEnd()) {
+                    ErrorReporter.error(line, "Unterminated string.")
+                    return
+                }
+
+                val escapeCharacter = advance()
+                when (escapeCharacter) {
+                    'n' -> sb.append('\n')
+                    't' -> sb.append('\t')
+                    '"' -> sb.append('"') 
+                    '\\' -> sb.append('\\')
+                    else -> ErrorReporter.error(line, "Invalid escape sequence '\\$escapeCharacter'.")
+                }
+
+            } else {
+                sb.append(advance())   
+            }
         }
 
         if (isAtEnd()) {
