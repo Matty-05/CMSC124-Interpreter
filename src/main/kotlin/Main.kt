@@ -32,6 +32,7 @@ fun runPrompt() {
     while (true) {
         print("> ")
         val line = readlnOrNull() ?: break
+        if (line.isBlank()) continue
         if (line.trim().lowercase() in listOf("exit", "quit")) break
         ErrorReporter.hadError = false
         run(line)
