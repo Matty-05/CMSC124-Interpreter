@@ -1,0 +1,6 @@
+Token(type=UNIT, lexeme=unit, literal=null, line=1)
+Token(type=IDENTIFIER, lexeme=broken, literal=null, line=1)
+Token(type=EQUAL, lexeme==, literal=null, line=1)
+Token(type=IDENTIFIER, lexeme=second, literal=null, line=2)
+Token(type=IDENTIFIER, lexeme=line, literal=null, line=2)
+Token(type=EOF, lexeme=, literal=null, line=2)
