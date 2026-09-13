@@ -125,14 +125,18 @@ class Scanner(private val source: String) {
     }
 
     private fun string() {
+        val startLine = line
         val sb = StringBuilder()
         while (peek() != '"' && !isAtEnd()) {
-            if (peek() == '\n') line++
+            if (peek() == '\n'){
+                ErrorReporter.error(startLine, "Strings may not span multiple lines.")
+                return
+            }
             if (peek() == '\\') {
                 advance()
 
                 if (isAtEnd()) {
-                    ErrorReporter.error(line, "Unterminated string.")
+                    ErrorReporter.error(startLine, "Unterminated string.")
                     return
                 }
 
@@ -151,7 +155,7 @@ class Scanner(private val source: String) {
         }
 
         if (isAtEnd()) {
-            ErrorReporter.error(line, "Unterminated string.")
+            ErrorReporter.error(startLine, "Unterminated string.")
             return
         }
 
