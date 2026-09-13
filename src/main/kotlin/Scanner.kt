@@ -127,7 +127,10 @@ class Scanner(private val source: String) {
     private fun string() {
         val sb = StringBuilder()
         while (peek() != '"' && !isAtEnd()) {
-            if (peek() == '\n') line++
+            if (peek() == '\n'){
+                ErrorReporter.error(line, "Strings may not span multiple lines.")
+                return
+            }
             if (peek() == '\\') {
                 advance()
 
