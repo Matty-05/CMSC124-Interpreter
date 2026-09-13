@@ -4,12 +4,12 @@ import kotlin.system.exitProcess
 fun main(args: Array<String>) {
     when {
         args.size == 2 && args[0] == "--tokenize" -> runFile(args[1])
-        args.size == 1 && !args[0].startsWith("--") -> runProgram(args[0])
         args.isEmpty() -> runPrompt()
-        else -> {
+        args.size == 1 && args[0].startsWith("--") -> {
             System.err.println("Usage: run [--tokenize <path>]")
             exitProcess(64)
         }
+        else -> runProgram(args[0])
     }
 }
 
