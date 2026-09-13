@@ -1,0 +1,7 @@
+Token(type=UNIT, lexeme=unit, literal=null, line=1)
+Token(type=IDENTIFIER, lexeme=nothing, literal=null, line=1)
+Token(type=EQUAL, lexeme==, literal=null, line=1)
+Token(type=STRING, lexeme="", literal=, line=1)
+Token(type=REPORT, lexeme=report, literal=null, line=2)
+Token(type=IDENTIFIER, lexeme=nothing, literal=null, line=2)
+Token(type=EOF, lexeme=, literal=null, line=2)

@@ -221,18 +221,23 @@ true.]
 
 ## Errors and diagnostics
 
-Message format:
+Message format: 
 
-```
-[one real static error]
-[one real runtime error]
-```
+Diagnostics are written to stderr. Nothing about a rejected file appears on
+stdout, so a rejected file's token stream is still compared cleanly by the test
+harness. The scanner keeps going after an error rather than stopping at the
+first one, so a file with several problems reports all of them in one run.
 
 | Failure | Exit code |
 |---|---|
-| [lexical error] | 65 |
-| [syntax error] | 65 |
-| [runtime error] | 70 |
+| Clean scan | 0 |
+| Unterminated string literal | 65 |
+| Newline inside a string literal | 65 |
+| Invalid escape sequence | 65 |
+| Character that cannot begin any lexeme | 65 |
+| Invalid command-line arguments | 64 |
+
+Exit 70 is reserved for runtime errors and is unused until Lab 3.
 
 ## Testing conventions
 

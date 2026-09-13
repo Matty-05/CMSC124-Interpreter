@@ -1,0 +1,5 @@
+Token(type=UNIT, lexeme=unit, literal=null, line=1)
+Token(type=IDENTIFIER, lexeme=broken, literal=null, line=1)
+Token(type=EQUAL, lexeme==, literal=null, line=1)
+Token(type=STRING, lexeme="bad \q escape", literal=bad  escape, line=1)
+Token(type=EOF, lexeme=, literal=null, line=1)
