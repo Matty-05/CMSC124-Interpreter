@@ -276,19 +276,19 @@ Output:
 ## Design rationale
 
 - Braces over indentation 
-If whitespaces were significant, then our scanner would need to tracka an indentation stack and would emit synthetic INDENT/DEDENT tokens whenever the depth changes and that's an entirely separate piece of bookkeping our scanner doesn't need. With braces, whitespaces can now be freely discarded which keeps our scanning loop much simplier. 
+If whitespaces were significant, then our scanner would need to track an indentation stack and would emit synthetic INDENT/DEDENT tokens whenever the depth changes and that's an entirely separate piece of bookkeping our scanner doesn't need. With braces, whitespaces can now be freely discarded which keeps our scanning loop much simpler. 
 
 - '#' over '//'
-// were originally used for comments, but since / is already an our division operator, that meant our scanner needed a lookahead check inside the / case. Switching to # for comments removes the ambiguity entirely since # isn't used for anything else in Nier.  
+// were originally used for comments, but since / is already our division operator, that meant our scanner needed a lookahead check inside the / case. Switching to # for comments removes the ambiguity entirely since # isn't used for anything else in Nier.  
 
 - not rather than ! 
-Since our and and or are already spelled as words rather than symbols, we made the negation a word as well to maintain consistency. If we allow both not and ! to mean the same thing then it would just be two spellings for one operator, adding confusion without adding capabilities. We fully commit to word based to logical operators so that ! in Nier source code is treated as a lexical error.  
+Since our and and or are already spelled as words rather than symbols, we made the negation a word as well to maintain consistency. If we allow both not and ! to mean the same thing then it would just be two spellings for one operator, adding confusion without adding capabilities. We fully commit to word-based logical operators so that ! in Nier source code is treated as a lexical error.  
 
 - No multi-line string 
-We decided that we cannot span multiple lines since according to lab manual, this is a common source of off-by-one line-counting bugs. So, by rejecting newlines inside strings entirely, we remove that entire category of bug.
+We decided that string cannot span multiple lines since according to lab manual, this is a common source of off-by-one line-counting bugs. So, by rejecting newlines inside strings entirely, we remove that entire category of bug.
 
 - No leading or trailing dot number
-We decided not to allow leading or trailing dot so it can act as its own independent DOT token in other contexts. Our number() function only treat . as part of the number when a digit immediately follows it. 
+We decided not to allow leading or trailing dot so it can act as its own independent DOT token in other contexts. Our number() function only treats . as part of the number when a digit immediately follows it. 
 
 ## Known limitations
 
