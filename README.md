@@ -20,7 +20,7 @@ Nier is a programming language designed for YoRHa androids and other operators w
 
 | Command | What it does |
 |---|---|
-| `./run <file>` | Executes a program. Available from Lab 4. |
+| `./run <file>` | Executes a program. Available from Lab 4; until then it prints the team banner that `tests/lab0` checks. |
 | `./run --tokenize <file>` | Prints the token stream. |
 | `./run --parse <file>` | Prints the parsed tree. Available from Lab 2. |
 | `./run --eval <file>` | Evaluates each expression and prints its value. Available from Lab 3. |
@@ -103,10 +103,13 @@ string.
 
 Underscores in numbers are separators for readability. They may appear anywhere
 between digits, including in the fractional part, so `1_000_000` and `3_000.5`
-are both valid. The lexeme keeps the underscores and the literal drops them. A
-number that ends with a separator, such as `1_000_`, is a lexical error. A
-leading underscore makes the token an identifier instead, since underscore is a
-valid identifier start character, so `_1000` is a name rather than a number.
+are both valid. The lexeme keeps the underscores and the literal drops them.
+The rule is exact: every separator needs a digit on both sides. A number that
+ends with one, such as `1_000_`, is a lexical error, and so is one where a
+separator divides nothing else — a run of them (`1__000`) or one sitting
+against the decimal point (`1_.5`). A leading underscore makes the token an
+identifier instead, since underscore is a valid identifier start character, so
+`_1000` is a name rather than a number.
 
 ### Identifiers
 
@@ -231,13 +234,21 @@ Message format:
 ```
 [line 1] Error: Unexpected character '!'. Use 'not' for negation.
 [line 3] Error: Invalid escape sequence '\q'.
-[line 5] Error: A number can't end with a separator
+[line 5] Error: A number can't end with a separator.
+[line 7] Error: A digit separator has to sit between two digits.
 ```
 
-Diagnostics are written to stderr. Nothing about a rejected file appears on
-stdout, so a rejected file's token stream is still compared cleanly by the test
-harness. The scanner keeps going after an error rather than stopping at the
-first one, so a file with several problems reports all of them in one run.
+Diagnostics are written to stderr. The scanner keeps going after an error
+rather than stopping at the first one, so a file with several problems reports
+all of them in one run. Only once the whole file has been scanned does the
+driver decide what to do with the token stream: a clean file prints its tokens
+to stdout and exits 0, and a rejected file prints nothing at all to stdout and
+exits 65. Nothing about a rejected file belongs on stdout, so every `.expected`
+file for a rejection case is empty.
+
+The REPL follows the same rule one line at a time. A line that scans cleanly
+prints its tokens; a line with an error prints only the diagnostic. Either way
+the prompt comes back, since a bad line must not end the session.
 
 | Failure | Exit code |
 |---|---|
@@ -245,7 +256,7 @@ first one, so a file with several problems reports all of them in one run.
 | Unterminated string literal | 65 |
 | Newline inside a string literal | 65 |
 | Invalid escape sequence | 65 |
-| Number ending in a digit separator | 65 |
+| Digit separator not flanked by digits | 65 |
 | Character that cannot begin any lexeme | 65 |
 | Invalid command-line arguments | 64 |
 
@@ -264,11 +275,19 @@ Exit 70 is reserved for runtime errors and is unused until Lab 3.
 What each Lab 1 test proves:
 
 ```
-keywords.mata            keywords resolve to their own types, and an identifier
-                         that begins with a keyword (iffy) stays one identifier
+keywords.mata            all fifteen keywords resolve to their own types, and
+                         an identifier that begins with a keyword (iffy) stays
+                         one identifier
+identifiers.mata         a leading underscore makes a name, not a number
+                         (_1000), a bare _ is a name, a keyword prefix is a
+                         name (unitary), and count and Count stay distinct
 operators.mata           every single-character token type
 multichar.mata           ==, !=, <=, >= each with their one-character version
-                         nearby, so maximal munch is exercised both ways
+                         nearby, so maximal munch is exercised both ways, and
+                         again with no spaces so the operands cannot separate
+                         them
+slashes.mata             / stays division next to a # comment, and // is two
+                         SLASH tokens rather than a comment
 numbers.mata             integers, decimals, a number followed by a non-digit,
                          both dot rules, and digit separators
 comments.mata            full-line, trailing, and a comment at end of file with
@@ -285,8 +304,15 @@ unterminated             rejection: a string with no closing quote
 string-multiline         rejection: a newline inside a string literal
 invalid-escape           rejection: an unrecognized escape character
 separator-trailing       rejection: a number ending in an underscore
+separator-misplaced      rejection: a run of separators (1__000) and one
+                         against the decimal point (1_.5), with a valid
+                         1_000_000 alongside to show the rule is not blanket
 unexpected-char          rejection: a character that cannot begin any lexeme
+bang                     rejection: a bare !, which Nier spells not
 ```
+
+Every rejection case pairs an empty `.expected` with a `.exit` holding 65,
+which is what the stdout rule above requires.
 
 Run locally with:
 
@@ -345,7 +371,7 @@ We decided not to allow leading or trailing dot so it can act as its own indepen
 Nier's stated purpose is testing combat protocols safely, and safe testing means being able to see what a variable holds without guessing. 'report' only shows a value, not which variable produced it, which gets confusing once several units are being inspected at once. 'scan' prints the name and value together, so the output is self-labeling. Most languages bolt this on well after launch, like Rust's dbg! macro or Python's f"{x=}", so we built it in from Lab 1 since inspection is central to what Nier is for.
 
 - Underscores as digit separators
-Long numbers are hard to read at a glance, since 1000000 and 10000000 look almost the same. Java, Kotlin, Python, and Rust all added separators for this reason so we did the same. We treat a trailing separator like 1_000_ as an error because a separator that divides nothing is almost certainly a typo, and accepting it silently would hide the mistake. We left leading underscores alone since _1000 already scans as an identifier, and overriding that would mean special casing a rule we already have.
+Long numbers are hard to read at a glance, since 1000000 and 10000000 look almost the same. Java, Kotlin, Python, and Rust all added separators for this reason so we did the same. We require every separator to have a digit on both sides, so 1_000_, 1__000, and 1_.5 are all errors. A separator that divides nothing is almost certainly a typo, and accepting it silently would hide the mistake. Checking both sides rather than just the end also keeps the scanner honest against its own documentation, since a rule written as "between digits" should be the rule the code enforces. We left leading underscores alone since _1000 already scans as an identifier, and overriding that would mean special casing a rule we already have.
 
 ## Known limitations
 
@@ -365,4 +391,4 @@ Long numbers are hard to read at a glance, since 1000000 and 10000000 look almos
 
 | Activity | What changed in the language |
 |---|---|
-| Lab 1 | Nier defined: 15 keywords, brace-delimited blocks, newline statement termination, `#` line comments, double-quoted strings with escapes and no line spanning, integer and decimal numbers with no leading or trailing dot, letter-or-underscore identifiers. Logical negation is the `not` keyword. A bare `!` is a lexical error. Token output format frozen. Added `scan` for name-and-value state inspection, distinct from `report`'s value-only output. Added underscore digit separators in numeric literals. |
+| Lab 1 | Nier defined: 15 keywords, brace-delimited blocks, newline statement termination, `#` line comments, double-quoted strings with escapes and no line spanning, integer and decimal numbers with no leading or trailing dot, letter-or-underscore identifiers. Logical negation is the `not` keyword. A bare `!` is a lexical error. Token output format frozen. Added `scan` for name-and-value state inspection, distinct from `report`'s value-only output. Added underscore digit separators in numeric literals, valid only between two digits. |
