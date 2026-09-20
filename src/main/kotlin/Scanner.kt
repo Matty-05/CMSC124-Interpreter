@@ -121,13 +121,33 @@ class Scanner(private val source: String) {
             while (peek().isDigit() || peek() == '_') advance()
         }
 
-        if (source[current-1] == '_') {
-            ErrorReporter.error(line, "A number can't end with a separator")
-            return
-        }
+        val lexeme = source.substring(start, current)
+        if (!separatorsWellPlaced(lexeme)) return
 
-        val value = source.substring(start, current).replace("_", "").toDouble()
-        addToken(TokenType.NUMBER, value)
+        addToken(TokenType.NUMBER, lexeme.replace("_", "").toDouble())
+    }
+
+    // A separator only reads as one when it sits between two digits. Anywhere
+    // else it divides nothing, which is far likelier to be a typo than intent,
+    // so the scanner says so instead of quietly dropping the underscore.
+    private fun separatorsWellPlaced(lexeme: String): Boolean {
+        for (i in lexeme.indices) {
+            if (lexeme[i] != '_') continue
+
+            // Index 0 is never a separator: a number always starts on a digit,
+            // so a leading underscore has already been scanned as a name.
+            val before = lexeme[i - 1]
+            val after = if (i + 1 < lexeme.length) lexeme[i + 1] else '\u0000'
+            if (before.isDigit() && after.isDigit()) continue
+
+            if (i == lexeme.length - 1) {
+                ErrorReporter.error(line, "A number can't end with a separator.")
+            } else {
+                ErrorReporter.error(line, "A digit separator has to sit between two digits.")
+            }
+            return false
+        }
+        return true
     }
 
     private fun string() {
