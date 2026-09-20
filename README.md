@@ -52,6 +52,7 @@ Exit codes: 0 when the file scans cleanly, 65 when the scanner rejects it with a
 | `and` | Logical conjunction |
 | `or` | Logical disjunction |
 | `not` | Logical negation |
+| `scan` | Prints a variable's name and value together |
 
 Every word here is a word a user cannot use as a variable name, so the list is
 kept deliberately small. Keywords are reserved in all contexts.
@@ -290,6 +291,9 @@ We decided that string cannot span multiple lines since according to lab manual,
 - No leading or trailing dot number
 We decided not to allow leading or trailing dot so it can act as its own independent DOT token in other contexts. Our number() function only treats . as part of the number when a digit immediately follows it. 
 
+- 'scan' for state inspection
+Nier's stated purpose is testing combat protocols safely, and safe testing means being able to see what a variable holds without guessing. 'report' only shows a value, not which variable produced it, which gets confusing once several units are being inspected at once. 'scan' prints the name and value together, so the output is self-labeling. Most languages bolt this on well after launch, like Rust's dbg! macro or Python's f"{x=}", so we built it in from Lab 1 since inspection is central to what Nier is for.
+
 ## Known limitations
 
 - [What doesn't work, what is unimplemented, where behavior is worse than you
@@ -299,4 +303,4 @@ We decided not to allow leading or trailing dot so it can act as its own indepen
 
 | Activity | What changed in the language |
 |---|---|
-| Lab 1 | Nier defined: 14 keywords, brace-delimited blocks, newline statement termination, `#` line comments, double-quoted strings with escapes and no line spanning, integer and decimal numbers with no leading or trailing dot, letter-or-underscore identifiers. Logical negation is the `not` keyword. A bare `!` is a lexical error. Token output format frozen. |
+| Lab 1 | Nier defined: 15 keywords, brace-delimited blocks, newline statement termination, `#` line comments, double-quoted strings with escapes and no line spanning, integer and decimal numbers with no leading or trailing dot, letter-or-underscore identifiers. Logical negation is the `not` keyword. A bare `!` is a lexical error. Token output format frozen. Added `scan` for name-and-value state inspection, distinct from `report`'s value-only output. |
