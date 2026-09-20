@@ -89,7 +89,7 @@ responsibility.
 
 | Kind | Syntax | Produces |
 |---|---|---|
-| Number | `42`, `3.14` | A numeric value. Integers and decimals are both supported. A leading dot (`.5`) and a trailing dot (`3.`) are not valid numbers. |
+| Number | `42`, `3.14`, `1_000_000` | A numeric value. Integers and decimals are both supported. A leading dot (`.5`) and a trailing dot (`3.`) are not valid numbers. Underscores may appear between digits and are stripped from the literal. A number may not end with one. |
 | String | `"hello"` | A text value. Double quotes only. Escape sequences are supported. A string may not span lines. |
 | Boolean | `active`, `inactive` | A truth value. |
 | Nil | `void` | The absence of a value. |
@@ -100,6 +100,13 @@ the character it denotes.
 
 A newline inside a string literal is a lexical error rather than part of the
 string.
+
+Underscores in numbers are separators for readability. They may appear anywhere
+between digits, including in the fractional part, so `1_000_000` and `3_000.5`
+are both valid. The lexeme keeps the underscores and the literal drops them. A
+number that ends with a separator, such as `1_000_`, is a lexical error. A
+leading underscore makes the token an identifier instead, since underscore is a
+valid identifier start character, so `_1000` is a name rather than a number.
 
 ### Identifiers
 
@@ -117,7 +124,7 @@ string.
 - Nesting: not applicable
 - A comment may appear at the end of a line of code, as in `unit x = 4  # note`
 - Comments are discarded by the scanner and never emitted as tokens
-- The harness note: `comment_prefix` in `tests/lab*/manifest.json` is set to `#`.
+- Harness note: `comment_prefix` in `tests/lab*/manifest.json` is set to `#`.
 
 Block comments were cut to keep the scanner's comment handling to a single
 case. Nested block comments in particular require tracking a depth counter and
@@ -152,9 +159,6 @@ One token per line. The fields are:
 
 Frozen as of Lab 1. Any change is recorded in the changelog, since every
 committed `.expected` file is compared against this format byte for byte.
-
-[What each field means. Frozen as of Lab 1; changes are recorded in the
-changelog.]
 
 ## Grammar
 
@@ -222,7 +226,13 @@ true.]
 
 ## Errors and diagnostics
 
-Message format: 
+Message format:
+
+```
+[line 1] Error: Unexpected character '!'. Use 'not' for negation.
+[line 3] Error: Invalid escape sequence '\q'.
+[line 5] Error: A number can't end with a separator
+```
 
 Diagnostics are written to stderr. Nothing about a rejected file appears on
 stdout, so a rejected file's token stream is still compared cleanly by the test
@@ -235,6 +245,7 @@ first one, so a file with several problems reports all of them in one run.
 | Unterminated string literal | 65 |
 | Newline inside a string literal | 65 |
 | Invalid escape sequence | 65 |
+| Number ending in a digit separator | 65 |
 | Character that cannot begin any lexeme | 65 |
 | Invalid command-line arguments | 64 |
 
@@ -250,8 +261,31 @@ Exit 70 is reserved for runtime errors and is unused until Lab 3.
 | tests/lab4 | Context | inline | none |
 | tests/lab5 | Functions | inline | none |
 
+What each Lab 1 test proves:
+
 ```
-[specific tests]...
+keywords.mata            keywords resolve to their own types, and an identifier
+                         that begins with a keyword (iffy) stays one identifier
+operators.mata           every single-character token type
+multichar.mata           ==, !=, <=, >= each with their one-character version
+                         nearby, so maximal munch is exercised both ways
+numbers.mata             integers, decimals, a number followed by a non-digit,
+                         both dot rules, and digit separators
+comments.mata            full-line, trailing, and a comment at end of file with
+                         no trailing newline
+multiline.mata           line numbers surviving blank lines, a comment, and a
+                         string literal
+empty.mata               an empty file produces only EOF
+escapes.mata             all four escape sequences, lexeme against literal
+empty-string.mata        an empty string literal
+scan.mata                the scan keyword against a number and a boolean
+sample-code.mata         the sample program in this document
+
+unterminated             rejection: a string with no closing quote
+string-multiline         rejection: a newline inside a string literal
+invalid-escape           rejection: an unrecognized escape character
+separator-trailing       rejection: a number ending in an underscore
+unexpected-char          rejection: a character that cannot begin any lexeme
 ```
 
 Run locally with:
@@ -265,42 +299,70 @@ python3 run_tests.py tests/lab1
 ## Sample code
 
 ```
-[a short program]
+unit count = 1_000_000
+scan count
+
+unit greeting = "Unit ready"
+report greeting
 ```
 
 Output:
 
 ```
-[its output]
+Token(type=UNIT, lexeme=unit, literal=null, line=1)
+Token(type=IDENTIFIER, lexeme=count, literal=null, line=1)
+Token(type=EQUAL, lexeme==, literal=null, line=1)
+Token(type=NUMBER, lexeme=1_000_000, literal=1000000.0, line=1)
+Token(type=SCAN, lexeme=scan, literal=null, line=2)
+Token(type=IDENTIFIER, lexeme=count, literal=null, line=2)
+Token(type=UNIT, lexeme=unit, literal=null, line=4)
+Token(type=IDENTIFIER, lexeme=greeting, literal=null, line=4)
+Token(type=EQUAL, lexeme==, literal=null, line=4)
+Token(type=STRING, lexeme="Unit ready", literal=Unit ready, line=4)
+Token(type=REPORT, lexeme=report, literal=null, line=5)
+Token(type=IDENTIFIER, lexeme=greeting, literal=null, line=5)
+Token(type=EOF, lexeme=, literal=null, line=5)
 ```
 
 ## Design rationale
 
-- Braces over indentation 
-If whitespaces were significant, then our scanner would need to track an indentation stack and would emit synthetic INDENT/DEDENT tokens whenever the depth changes and that's an entirely separate piece of bookkeping our scanner doesn't need. With braces, whitespaces can now be freely discarded which keeps our scanning loop much simpler. 
+- Braces over indentation
+If whitespaces were significant, then our scanner would need to track an indentation stack and would emit synthetic INDENT/DEDENT tokens whenever the depth changes and that's an entirely separate piece of bookkeping our scanner doesn't need. With braces, whitespaces can now be freely discarded which keeps our scanning loop much simpler.
 
 - '#' over '//'
-// were originally used for comments, but since / is already our division operator, that meant our scanner needed a lookahead check inside the / case. Switching to # for comments removes the ambiguity entirely since # isn't used for anything else in Nier.  
+// were originally used for comments, but since / is already our division operator, that meant our scanner needed a lookahead check inside the / case. Switching to # for comments removes the ambiguity entirely since # isn't used for anything else in Nier.
 
-- not rather than ! 
-Since our and and or are already spelled as words rather than symbols, we made the negation a word as well to maintain consistency. If we allow both not and ! to mean the same thing then it would just be two spellings for one operator, adding confusion without adding capabilities. We fully commit to word-based logical operators so that ! in Nier source code is treated as a lexical error.  
+- not rather than !
+Since our and and or are already spelled as words rather than symbols, we made the negation a word as well to maintain consistency. If we allow both not and ! to mean the same thing then it would just be two spellings for one operator, adding confusion without adding capabilities. We fully commit to word-based logical operators so that ! in Nier source code is treated as a lexical error.
 
-- No multi-line string 
+- No multi-line string
 We decided that string cannot span multiple lines since according to lab manual, this is a common source of off-by-one line-counting bugs. So, by rejecting newlines inside strings entirely, we remove that entire category of bug.
 
 - No leading or trailing dot number
-We decided not to allow leading or trailing dot so it can act as its own independent DOT token in other contexts. Our number() function only treats . as part of the number when a digit immediately follows it. 
+We decided not to allow leading or trailing dot so it can act as its own independent DOT token in other contexts. Our number() function only treats . as part of the number when a digit immediately follows it.
 
 - 'scan' for state inspection
 Nier's stated purpose is testing combat protocols safely, and safe testing means being able to see what a variable holds without guessing. 'report' only shows a value, not which variable produced it, which gets confusing once several units are being inspected at once. 'scan' prints the name and value together, so the output is self-labeling. Most languages bolt this on well after launch, like Rust's dbg! macro or Python's f"{x=}", so we built it in from Lab 1 since inspection is central to what Nier is for.
 
+- Underscores as digit separators
+Long numbers are hard to read at a glance, since 1000000 and 10000000 look almost the same. Java, Kotlin, Python, and Rust all added separators for this reason so we did the same. We treat a trailing separator like 1_000_ as an error because a separator that divides nothing is almost certainly a typo, and accepting it silently would hide the mistake. We left leading underscores alone since _1000 already scans as an identifier, and overriding that would mean special casing a rule we already have.
+
 ## Known limitations
 
-- [What doesn't work, what is unimplemented, where behavior is worse than you
-  would like.]
+- Block comments are not supported, so every commented line needs its own `#`.
+- Diagnostics report a line number but no column, so a line with two problems
+  points at the line twice.
+- `scan` has its own token type and is recognized by the scanner, but it has no
+  runtime behavior until Lab 3.
+- Digit separators are stripped when the literal is built, so `1_000_000` and
+  `1000000` differ only in their lexeme.
+- Identifier start characters are documented as ASCII letters, but the scanner
+  uses Kotlin's `isLetter()`, which accepts any Unicode letter. `café` is
+  currently a valid identifier. The scanner is more permissive than this
+  document says.
 
 ## Changelog
 
 | Activity | What changed in the language |
 |---|---|
-| Lab 1 | Nier defined: 15 keywords, brace-delimited blocks, newline statement termination, `#` line comments, double-quoted strings with escapes and no line spanning, integer and decimal numbers with no leading or trailing dot, letter-or-underscore identifiers. Logical negation is the `not` keyword. A bare `!` is a lexical error. Token output format frozen. Added `scan` for name-and-value state inspection, distinct from `report`'s value-only output. |
+| Lab 1 | Nier defined: 15 keywords, brace-delimited blocks, newline statement termination, `#` line comments, double-quoted strings with escapes and no line spanning, integer and decimal numbers with no leading or trailing dot, letter-or-underscore identifiers. Logical negation is the `not` keyword. A bare `!` is a lexical error. Token output format frozen. Added `scan` for name-and-value state inspection, distinct from `report`'s value-only output. Added underscore digit separators in numeric literals. |
