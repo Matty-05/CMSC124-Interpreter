@@ -114,14 +114,19 @@ class Scanner(private val source: String) {
     }
 
     private fun number() {
-        while (peek().isDigit()) advance()
+        while (peek().isDigit() || peek() == '_') advance()
 
         if (peek() == '.' && peekNext().isDigit()) {
             advance() // consume the "."
-            while (peek().isDigit()) advance()
+            while (peek().isDigit() || peek() == '_') advance()
         }
 
-        val value = source.substring(start, current).toDouble()
+        if (source[current-1] == '_') {
+            ErrorReporter.error(line, "A number can't end with a separator")
+            return
+        }
+
+        val value = source.substring(start, current).replace("_", "").toDouble()
         addToken(TokenType.NUMBER, value)
     }
 
