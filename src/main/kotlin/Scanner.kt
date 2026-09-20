@@ -19,7 +19,8 @@ class Scanner(private val source: String) {
             "for" to TokenType.FOR,
             "and" to TokenType.AND,
             "or" to TokenType.OR,
-            "not" to TokenType.NOT
+            "not" to TokenType.NOT,
+            "scan" to TokenType.SCAN
         )
     }
 

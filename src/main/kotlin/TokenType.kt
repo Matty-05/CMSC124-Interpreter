@@ -18,6 +18,7 @@ enum class TokenType {
     ACTIVE, INACTIVE, VOID,
     IF, ELSE, WHILE, FOR,
     AND, OR, NOT,
+    SCAN,
 
     EOF
 }
