@@ -33,7 +33,6 @@ class Parser(private val tokens: List<Token>) {
     }
 
     private fun error(token: Token, message: String): ParseError {
-        val where = if (token.type == TokenType.EOF) "end" else "'${token.lexeme}'"
         ErrorReporter.error(token, message)
         return ParseError()
     }

@@ -11,6 +11,7 @@ fun main(args: Array<String>) {
             System.err.println("Usage: run [--tokenize <path>] [--parse <path>]")
             exitProcess(64)
         }
+    }
 }
 
 fun runFile(path: String) {
