@@ -34,7 +34,7 @@ class Parser(private val tokens: List<Token>) {
 
     private fun error(token: Token, message: String): ParseError {
         val where = if (token.type == TokenType.EOF) "end" else "'${token.lexeme}'"
-        ErrorReporter.error(token.line, "Error at $where: $message")
+        ErrorReporter.error(token, message)
         return ParseError()
     }
 
@@ -61,5 +61,9 @@ class Parser(private val tokens: List<Token>) {
         return expr
     }
 
-    fun parse(): Expr = term()
+    fun parse(): Expr {
+        val expr = term()
+        if (!isAtEnd()) throw error(peek(), "Expect end of expression.")
+        return expr
+    }
 }

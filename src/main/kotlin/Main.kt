@@ -6,12 +6,11 @@ fun main(args: Array<String>) {
         args.size == 2 && args[0] == "--tokenize" -> runFile(args[1])
         args.size == 2 && args[0] == "--parse" -> runParseFile(args[1])
         args.isEmpty() -> runPrompt()
-        args.size == 1 && args[0].startsWith("--") -> {
+        args.size == 1 && !args[0].startsWith("--") -> runProgram(args[0])
+        else -> {
             System.err.println("Usage: run [--tokenize <path>] [--parse <path>]")
             exitProcess(64)
         }
-        else -> runProgram(args[0])
-    }
 }
 
 fun runFile(path: String) {
@@ -29,7 +28,7 @@ fun runParseFile(path: String) {
     val parser = Parser(tokens)
     try {
         val expr = parser.parse()
-        println(printExpr(expr))
+        if (!ErrorReporter.hadError) println(printExpr(expr))
     } catch (e: Parser.ParseError) {
         // error already reported to stderr inside Parser.error()
     }
