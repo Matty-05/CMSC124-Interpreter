@@ -15,8 +15,13 @@ fun main(args: Array<String>) {
 
 fun runFile(path: String) {
     val source = File(path).readText()
-    run(source)
+    val tokens = scan(source)
+    // A rejected file puts nothing on stdout. The whole file is scanned first
+    // so every error is reported, then the token stream is discarded.
     if (ErrorReporter.hadError) exitProcess(65)
+    for (token in tokens) {
+        println(token)
+    }
     exitProcess(0)
 }
 
@@ -35,14 +40,15 @@ fun runPrompt() {
         if (line.isBlank()) continue
         if (line.trim().lowercase() in listOf("exit", "quit")) break
         ErrorReporter.hadError = false
-        run(line)
+        val tokens = scan(line)
+        // Same rule as a file: a rejected line reports on stderr only. The
+        // error is not fatal, so the prompt comes back either way.
+        if (!ErrorReporter.hadError) {
+            for (token in tokens) {
+                println(token)
+            }
+        }
     }
 }
 
-fun run(source: String) {
-    val scanner = Scanner(source)
-    val tokens = scanner.scanTokens()
-    for (token in tokens) {
-        println(token)
-    }
-}
+fun scan(source: String): List<Token> = Scanner(source).scanTokens()
