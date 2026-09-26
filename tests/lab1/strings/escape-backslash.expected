@@ -1,0 +1,2 @@
+Token(type=STRING, lexeme="back\\slash", literal=back\slash, line=1)
+Token(type=EOF, lexeme=, literal=null, line=1)
