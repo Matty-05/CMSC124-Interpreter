@@ -1,0 +1,2 @@
+Token(type=STRING, lexeme="col1\tcol2", literal=col1	col2, line=1)
+Token(type=EOF, lexeme=, literal=null, line=1)
