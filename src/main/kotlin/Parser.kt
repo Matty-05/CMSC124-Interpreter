@@ -47,21 +47,48 @@ class Parser(private val tokens: List<Token>) {
         if (match(TokenType.INACTIVE)) return Expr.Literal(false)
         if (match(TokenType.VOID)) return Expr.Literal(null)
 
+        if (match(TokenType.LEFT_PAREN)) {
+            val expr = expression()
+            consume(TokenType.RIGHT_PAREN, "Expect ')' after expression.")
+            return Expr.Grouping(expr)
+        }
+
         throw error(peek(), "Expect expression.")
     }
 
-    private fun term(): Expr {
-        var expr = primary()
-        while (match(TokenType.MINUS, TokenType.PLUS)) {
+    private fun unary(): Expr {
+        if (match(TokenType.NOT, TokenType.MINUS)) {
             val operator = previous()
-            val right = primary()
+            val right = unary()
+            return Expr.Unary(operator, right)
+        }
+        return primary()
+    }
+
+    private fun factor(): Expr {
+        var expr = unary()
+        while (match(TokenType.SLASH, TokenType.STAR)) {
+            val operator = previous()
+            val right = unary()
             expr = Expr.Binary(expr, operator, right)
         }
         return expr
     }
 
+    private fun term(): Expr {
+        var expr = factor()
+        while (match(TokenType.MINUS, TokenType.PLUS)) {
+            val operator = previous()
+            val right = factor()
+            expr = Expr.Binary(expr, operator, right)
+        }
+        return expr
+    }
+
+    private fun expression(): Expr = term()
+
     fun parse(): Expr {
-        val expr = term()
+        val expr = expression()
         if (!isAtEnd()) throw error(peek(), "Expect end of expression.")
         return expr
     }
