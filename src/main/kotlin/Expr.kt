@@ -1,4 +1,6 @@
 sealed class Expr {
     class Literal(val value: Any?) : Expr()
     class Binary(val left: Expr, val operator: Token, val right: Expr) : Expr()
+    class Unary(val operator: Token, val right: Expr) : Expr()
+    class Grouping(val expression: Expr) : Expr()
 }
