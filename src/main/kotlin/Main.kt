@@ -28,26 +28,26 @@ fun runFile(path: String) {
 
 fun runParseFile(path: String) {
     val source = File(path).readText()
-    ErrorReporter.hadError = false
-    val scanner = Scanner(source)
-    val tokens = scanner.scanTokens()
-    val parser = Parser(tokens)
-    try {
-        val expr = parser.parse()
-        if (!ErrorReporter.hadError) println(printExpr(expr))
-    } catch (e: Parser.ParseError) {
-        // error already reported to stderr inside Parser.error()
+    val lines = source.lines().filter { it.isNotBlank() }
+
+    var hadAnyError = false
+
+    for (line in lines) {
+        ErrorReporter.hadError = false
+        val scanner = Scanner(line)
+        val tokens = scanner.scanTokens()
+        val parser = Parser(tokens)
+        try {
+            val expr = parser.parse()
+            if (!ErrorReporter.hadError) println(AstPrinter.print(expr))
+        } catch (e: Parser.ParseError) {
+            // Error message and hadError flag were already set inside Parser's error() function.
+        }
+        if (ErrorReporter.hadError) hadAnyError = true
     }
-    if (ErrorReporter.hadError) exitProcess(65)
+
+    if (hadAnyError) exitProcess(65)
     exitProcess(0)
-}
-
-
-fun printExpr(expr: Expr): String {
-    return when (expr) {
-        is Expr.Literal -> expr.value?.toString() ?: "void"
-        is Expr.Binary -> "(${expr.operator.lexeme} ${printExpr(expr.left)} ${printExpr(expr.right)})"
-    }
 }
 
 fun runProgram(path: String) {
@@ -65,13 +65,14 @@ fun runPrompt() {
         if (line.isBlank()) continue
         if (line.trim().lowercase() in listOf("exit", "quit")) break
         ErrorReporter.hadError = false
-        val tokens = scan(line)
-        // Same rule as a file: a rejected line reports on stderr only. The
-        // error is not fatal, so the prompt comes back either way.
-        if (!ErrorReporter.hadError) {
-            for (token in tokens) {
-                println(token)
-            }
+        val scanner = Scanner(line)
+        val tokens = scanner.scanTokens()
+        val parser = Parser(tokens)
+        try {
+            val expr = parser.parse()
+            if (!ErrorReporter.hadError) println(AstPrinter.print(expr))
+        } catch (e: Parser.ParseError) {
+            // Error message and hadError flag were already set inside Parser's error() function.
         }
     }
 }
