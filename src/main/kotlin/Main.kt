@@ -28,25 +28,29 @@ fun runFile(path: String) {
 
 fun runParseFile(path: String) {
     val source = File(path).readText()
-    val lines = source.lines().filter { it.isNotBlank() }
+    ErrorReporter.hadError = false
+    val tokens = Scanner(source).scanTokens()
+    if (ErrorReporter.hadError) exitProcess(65)
 
-    var hadAnyError = false
+    val realTokens = tokens.dropLast(1) // drop the scanner's own trailing EOF
 
-    for (line in lines) {
-        ErrorReporter.hadError = false
-        val scanner = Scanner(line)
-        val tokens = scanner.scanTokens()
-        val parser = Parser(tokens)
-        try {
-            val expr = parser.parse()
-            if (!ErrorReporter.hadError) println(AstPrinter.print(expr))
-        } catch (e: Parser.ParseError) {
-            // Error message and hadError flag were already set inside Parser's error() function.
-        }
-        if (ErrorReporter.hadError) hadAnyError = true
+    if (realTokens.isEmpty()) {
+        ErrorReporter.error(1, "Expect expression.")
+        exitProcess(65)
     }
 
-    if (hadAnyError) exitProcess(65)
+    val output = mutableListOf<String>()
+    for ((line, lineTokens) in realTokens.groupBy { it.line }) {
+        val eof = Token(TokenType.EOF, "", null, line)
+        try {
+            output += AstPrinter.print(Parser(lineTokens + eof).parse())
+        } catch (e: Parser.ParseError) {
+            // Already reported inside Parser.error().
+        }
+    }
+    
+    if (ErrorReporter.hadError) exitProcess(65)
+    output.forEach(::println)
     exitProcess(0)
 }
 
