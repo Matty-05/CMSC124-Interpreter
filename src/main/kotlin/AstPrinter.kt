@@ -21,9 +21,6 @@ object AstPrinter {
 
     private fun stringify(value: Any?): String {
         if (value == null) return "void"
-        if (value is Double) {
-            return value.toString()
-        }
         return value.toString()
     }
 }
