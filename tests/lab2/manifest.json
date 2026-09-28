@@ -1,0 +1,5 @@
+{
+  "ext": ".mata",
+  "flag": "--parse",
+  "mode": "sidecar"
+}

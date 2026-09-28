@@ -30,25 +30,29 @@ fun runFile(path: String) {
 fun runParseFile(path: String) {
     val source = File(path).readText()
     ErrorReporter.hadError = false
-    val scanner = Scanner(source)
-    val tokens = scanner.scanTokens()
-    val parser = Parser(tokens)
-    try {
-        val expr = parser.parse()
-        if (!ErrorReporter.hadError) println(printExpr(expr))
-    } catch (e: Parser.ParseError) {
-        // error already reported to stderr inside Parser.error()
-    }
+    val tokens = Scanner(source).scanTokens()
     if (ErrorReporter.hadError) exitProcess(65)
-    exitProcess(0)
-}
 
+    val realTokens = tokens.dropLast(1) // drop the scanner's own trailing EOF
 
-fun printExpr(expr: Expr): String {
-    return when (expr) {
-        is Expr.Literal -> expr.value?.toString() ?: "void"
-        is Expr.Binary -> "(${expr.operator.lexeme} ${printExpr(expr.left)} ${printExpr(expr.right)})"
+    if (realTokens.isEmpty()) {
+        ErrorReporter.error(1, "Expect expression.")
+        exitProcess(65)
     }
+
+    val output = mutableListOf<String>()
+    for ((line, lineTokens) in realTokens.groupBy { it.line }) {
+        val eof = Token(TokenType.EOF, "", null, line)
+        try {
+            output += AstPrinter.print(Parser(lineTokens + eof).parse())
+        } catch (e: Parser.ParseError) {
+            // Already reported inside Parser.error().
+        }
+    }
+    
+    if (ErrorReporter.hadError) exitProcess(65)
+    output.forEach(::println)
+    exitProcess(0)
 }
 
 fun runProgram(path: String) {
@@ -66,7 +70,8 @@ fun runPrompt() {
         if (line.isBlank()) continue
         if (line.trim().lowercase() in listOf("exit", "quit")) break
         ErrorReporter.hadError = false
-        val tokens = scan(line)
+        val scanner = Scanner(line)
+        val tokens = scanner.scanTokens()
         // Unlike a file, the REPL shows the tokens even when the line has an
         // error. The diagnostics print first, during the scan, so the user sees
         // what went wrong and what the scanner still made of the rest. The
@@ -74,7 +79,15 @@ fun runPrompt() {
         for (token in tokens) {
             println(token)
         }
+        val parser = Parser(tokens)
+        try {
+            val expr = parser.parse()
+            if (!ErrorReporter.hadError) println(AstPrinter.print(expr))
+        } catch (e: Parser.ParseError) {
+            // Error message and hadError flag were already set inside Parser's error() function.
+        }
     }
 }
+
 
 fun scan(source: String): List<Token> = Scanner(source).scanTokens()
