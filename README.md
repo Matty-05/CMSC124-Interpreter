@@ -240,15 +240,16 @@ Message format:
 
 Diagnostics are written to stderr. The scanner keeps going after an error
 rather than stopping at the first one, so a file with several problems reports
-all of them in one run. Only once the whole file has been scanned does the
-driver decide what to do with the token stream: a clean file prints its tokens
-to stdout and exits 0, and a rejected file prints nothing at all to stdout and
-exits 65. Nothing about a rejected file belongs on stdout, so every `.expected`
-file for a rejection case is empty.
+all of them in one run. The tokens print to stdout either way: a clean file
+exits 0, and a file with an error still prints the tokens the scanner managed
+to produce and then exits 65. The exit code is what marks a file as rejected.
+Showing the tokens lets you see what the scanner made of the rest of the file.
+A character or string that caused an error produces no token, except an
+invalid escape, where the string is still emitted without the bad escape.
 
-The REPL follows the same rule one line at a time. A line that scans cleanly
-prints its tokens; a line with an error prints only the diagnostic. Either way
-the prompt comes back, since a bad line must not end the session.
+The REPL does the same one line at a time: the diagnostic first, then the
+line's tokens. Either way the prompt comes back, since a bad line must not end
+the session.
 
 | Failure | Exit code |
 |---|---|
@@ -301,8 +302,8 @@ errors/        every rejection: unterminated string, string across lines,
                going and reports both)
 ```
 
-Every file in `errors/` pairs an empty `.expected` with a `.exit` holding 65,
-which is what the stdout rule above requires. The exact diagnostic goes in a
+Every file in `errors/` pairs a `.expected` holding the tokens the scanner still
+produced with a `.exit` holding 65. The exact diagnostic goes in a
 `# expect error:` comment at the top of the `.mata` file. Sidecar mode does not
 check stderr, so these lines document the message for a reader and are not
 enforced. They use the harness's inline syntax, so they carry over if the
