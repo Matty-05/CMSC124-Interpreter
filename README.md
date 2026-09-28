@@ -22,11 +22,11 @@ Nier is a programming language designed for YoRHa androids and other operators w
 |---|---|
 | `./run <file>` | Executes a program. Available from Lab 4; until then it prints the team banner that `tests/lab0` checks. |
 | `./run --tokenize <file>` | Prints the token stream. |
-| `./run --parse <file>` | Prints the parsed tree. Available from Lab 2. |
+| `./run --parse <file>` | Parses one expression per line and prints each tree. |
 | `./run --eval <file>` | Evaluates each expression and prints its value. Available from Lab 3. |
 | `./run` | Starts the REPL. |
 
-Exit codes: 0 when the file scans cleanly, 65 when the scanner rejects it with a lexical error, 70 when a successfully parsed program fails during evaluation.
+Exit codes: 0 when the file scans (and, with `--parse`, parses) cleanly, 65 when the scanner or parser rejects it, 70 when a successfully parsed program fails during evaluation.
 
 ## File extension
 
@@ -61,25 +61,28 @@ kept deliberately small. Keywords are reserved in all contexts.
 
 | Operator | Category | Operands | Associativity | Precedence |
 |---|---|---|---|---|
-| `=` | assignment | binary | — | — |
-| `or` | logical | binary | — | — |
-| `and` | logical | binary | — | — |
-| `==` | equality | binary | — | — |
-| `!=` | equality | binary | — | — |
-| `<` | comparison | binary | — | — |
-| `<=` | comparison | binary | — | — |
-| `>` | comparison | binary | — | — |
-| `>=` | comparison | binary | — | — |
-| `+` | arithmetic | binary | — | — |
-| `-` | arithmetic | binary | — | — |
-| `*` | arithmetic | binary | — | — |
-| `/` | arithmetic | binary | — | — |
-| `not` | logical | unary | — | — |
-| `-` | arithmetic negation | unary | — | — |
+| `=` | assignment | binary | not parsed yet | not parsed yet |
+| `or` | logical | binary | not parsed yet | not parsed yet |
+| `and` | logical | binary | not parsed yet | not parsed yet |
+| `==` | equality | binary | not parsed yet | not parsed yet |
+| `!=` | equality | binary | not parsed yet | not parsed yet |
+| `<` | comparison | binary | not parsed yet | not parsed yet |
+| `<=` | comparison | binary | not parsed yet | not parsed yet |
+| `>` | comparison | binary | not parsed yet | not parsed yet |
+| `>=` | comparison | binary | not parsed yet | not parsed yet |
+| `+` | arithmetic | binary | left | 1 |
+| `-` | arithmetic | binary | left | 1 |
+| `*` | arithmetic | binary | left | 2 |
+| `/` | arithmetic | binary | left | 2 |
+| `not` | logical | unary | right | 3 |
+| `-` | arithmetic negation | unary | right | 3 |
 
-Category and operand count are settled as of Lab 1. Associativity (left, right,
-or none) and precedence (1 = loosest) are filled in for Lab 2, when the grammar
-has to encode them in how its rules delegate to each other.
+Category and operand count are settled as of Lab 1. Precedence runs from 1
+(loosest) to 3 (tightest) and is encoded in the grammar below: each level's rule
+calls the next tighter one. The operators marked "not parsed yet" are scanned
+but have no grammar rule, so a line that uses one is rejected. Unary operators
+are listed as right-associative because they nest to the right: `- -1` is
+`-(-1)`.
 
 `-` appears twice, as binary subtraction and as unary negation. The scanner
 emits the same `MINUS` token for both. Distinguishing them is the parser's
@@ -166,18 +169,60 @@ committed `.expected` file is compared against this format byte for byte.
 ## Grammar
 
 ```
-[Your complete context-free grammar, current as of the latest activity.
-Unambiguous, with precedence and associativity encoded in rule structure.]
+expression → term ;
+term       → factor ( ( "+" | "-" ) factor )* ;
+factor     → unary ( ( "*" | "/" ) unary )* ;
+unary      → ( "not" | "-" ) unary
+           | primary ;
+primary    → NUMBER | STRING | "active" | "inactive" | "void"
+           | "(" expression ")" ;
 ```
+
+Each rule matches one function in `Parser.kt` with the same name. A rule only
+calls the rule for the next tighter level, which is what makes the grammar
+unambiguous: `1 + 2 * 3` can only come out as `1 + (2 * 3)`. The `( ... )*`
+loops in `term` and `factor` build the tree left to right, so `1 - 2 - 3` is
+`(1 - 2) - 3`. `unary` calls itself, so prefix operators stack (`not not
+active`, `- -1`).
+
+`not` sits at the same level as unary `-`, above `*` and `/`. It applies only to
+the operand directly after it, so `not 1 + 2` is `(not 1) + 2`.
+
+### Splitting rule
+
+A file holds one expression per line. The whole file is scanned first, then the
+tokens are grouped by the line they came from and each group is parsed as its
+own expression.
+
+- Blank lines and comment-only lines hold no tokens, so they are skipped.
+- An expression cannot continue onto the next line, even inside parentheses.
+  `(1 +` on one line and `2)` on the next is two broken lines, not one
+  expression.
+- Two expressions on one line (`1 2`) is an error: the parser expects the line
+  to end after the first one.
+- A file with no expressions at all, including one with only comments, is
+  rejected.
+- Every line is parsed even after an earlier line fails, so each bad line gets
+  its own diagnostic.
 
 ## Parse output format
 
 ```
-[one line of real --parse output, e.g. (+ 1.0 (* 2.0 3.0))]
+(+ 1.0 (* 2.0 3.0))
 ```
 
-- Groupings print as: [form]
-- Numbers print as: [form]
+One line of output per expression, in file order. Every operator node prints in
+prefix form, wrapped in parentheses.
+
+- Binary operators print as: `(op left right)`, e.g. `(- (- 1.0 2.0) 3.0)`
+- Unary operators print as: `(op operand)`, e.g. `(not true)`, `(- 1.0)`
+- Groupings print as: `(group expression)`, e.g. `(group (+ 2.0 3.0))`
+- Numbers print as: a decimal, always with a fractional part: `4` prints as
+  `4.0`. Digit separators are gone, since the literal is printed rather than the
+  lexeme.
+- Strings print as: their contents without quotes: `"hello"` prints as `hello`
+- Booleans print as: `true` and `false`
+- `void` prints as: `void`
 
 ## Semantics
 
@@ -238,18 +283,34 @@ Message format:
 [line 7] Error: A digit separator has to sit between two digits.
 ```
 
+Parser diagnostics name the token where parsing failed, or `end` when the line
+ran out:
+
+```
+[line 1] Error at end: Expect expression.
+[line 1] Error at '2': Expect end of expression.
+[line 1] Error at end: Expect ')' after expression.
+[line 1] Error: Expect expression.
+```
+
+The last form is for a file with no expressions at all.
+
 Diagnostics are written to stderr. The scanner keeps going after an error
 rather than stopping at the first one, so a file with several problems reports
-all of them in one run. The tokens print to stdout either way: a clean file
+all of them in one run. With `--tokenize`, the tokens print to stdout either way: a clean file
 exits 0, and a file with an error still prints the tokens the scanner managed
 to produce and then exits 65. The exit code is what marks a file as rejected.
 Showing the tokens lets you see what the scanner made of the rest of the file.
 A character or string that caused an error produces no token, except an
 invalid escape, where the string is still emitted without the bad escape.
 
-The REPL does the same one line at a time: the diagnostic first, then the
-line's tokens. Either way the prompt comes back, since a bad line must not end
-the session.
+`--parse` is stricter. A lexical error rejects the file before any parsing
+happens. Otherwise every line is parsed, and the parsed trees are printed only
+if no line failed, so a rejected file prints nothing to stdout.
+
+The REPL works one line at a time. It prints the diagnostics first, then the
+line's tokens, then the parsed tree if the line had no errors. Either way the
+prompt comes back, since a bad line must not end the session.
 
 | Failure | Exit code |
 |---|---|
@@ -259,6 +320,8 @@ the session.
 | Invalid escape sequence | 65 |
 | Digit separator not flanked by digits | 65 |
 | Character that cannot begin any lexeme | 65 |
+| Syntax error on any line (`--parse`) | 65 |
+| File with no expressions (`--parse`) | 65 |
 | Invalid command-line arguments | 64 |
 
 Exit 70 is reserved for runtime errors and is unused until Lab 3.
@@ -311,12 +374,32 @@ folder ever switches to inline mode. A string that crosses a line reports two
 errors, because the closing quote on the next line opens a new unterminated
 string.
 
+Lab 2 tests follow the same layout, one case per file, run with `--parse`:
+
+```
+literals/      one file per literal: number, decimal, string, active,
+               inactive, void
+unary/         chained unary operators (- -1, not not active)
+grouping/      a group that changes the tree ((2 + 3) * 4) and a redundant
+               one (((((1)))))
+precedence/    * before + (1 + 2 * 3) and left associativity (1 - 2 - 3)
+lines/         two expressions on two lines, and an expression that tries to
+               continue onto the next line (rejected)
+errors/        an unclosed parenthesis, a missing right operand, a token that
+               can't begin an expression, and a bad line after a good one
+empty/         a file with only a comment, which is rejected
+```
+
+Every rejected lab2 file has an empty `.expected`, since `--parse` prints
+nothing for a rejected file, and a `.exit` holding 65.
+
 Run locally with:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/WhiteLicorice/cmsc-124-harness/v1.1/run_tests.py -o run_tests.py
 ./build.sh
 python3 run_tests.py tests/lab1
+python3 run_tests.py tests/lab2
 ```
 
 ## Sample code
@@ -370,6 +453,12 @@ Nier's stated purpose is testing combat protocols safely, and safe testing means
 - Underscores as digit separators
 Long numbers are hard to read at a glance, since 1000000 and 10000000 look almost the same. Java, Kotlin, Python, and Rust all added separators for this reason so we did the same. We require every separator to have a digit on both sides, so 1_000_, 1__000, and 1_.5 are all errors. A separator that divides nothing is almost certainly a typo, and accepting it silently would hide the mistake. Checking both sides rather than just the end also keeps the scanner honest against its own documentation, since a rule written as "between digits" should be the rule the code enforces. We left leading underscores alone since _1000 already scans as an identifier, and overriding that would mean special casing a rule we already have.
 
+- One expression per line
+Nier already ends statements with a newline instead of a semicolon, so we made `--parse` follow the same rule. We split on the line numbers the scanner already records instead of on the raw text, so every diagnostic keeps its real line number. Not letting an expression continue past the end of a line means a missing operand is caught on the line where it happened, instead of silently pulling in the next line.
+
+- `not` at the unary level
+`not` and unary `-` are both prefix operators that take one operand, so they share one rule. This keeps the grammar to a single unary level. The cost is that `not` binds tighter than arithmetic, which we note under known limitations.
+
 ## Known limitations
 
 - Block comments are not supported, so every commented line needs its own `#`.
@@ -383,9 +472,28 @@ Long numbers are hard to read at a glance, since 1000000 and 10000000 look almos
   uses Kotlin's `isLetter()`, which accepts any Unicode letter. `café` is
   currently a valid identifier. The scanner is more permissive than this
   document says.
+- Equality, comparison, `and`, `or`, `=`, and identifiers are scanned but not
+  parsed yet. A line that uses one is rejected, e.g. `1 < 2` reports
+  `Error at '<': Expect end of expression.`
+- An expression cannot span lines, even inside parentheses.
+- `not` binds tighter than `+` and `*`, so `not 1 + 2` parses as
+  `(+ (not 1.0) 2.0)`.
+- Strings print without quotes, so the string `"1.0"` and the number `1` both
+  print as `1.0`.
+- Numbers print with Kotlin's `Double.toString()`, which switches to scientific
+  notation at ten million and above or below 0.001: `10_000_000` prints as
+  `1.0E7` and `0.0001` as `1.0E-4`.
+- A lexical error stops `--parse` before parsing, so a file with both a lexical
+  and a syntax error reports only the lexical one.
+- The error for an empty or comment-only file always says line 1, even when the
+  comment is further down.
+- The REPL still parses a line that had a lexical error, so it can show a
+  second, parser error: `unit y = !x` also reports
+  `Error at 'unit': Expect expression.`
 
 ## Changelog
 
 | Activity | What changed in the language |
 |---|---|
 | Lab 1 | Nier defined: 15 keywords, brace-delimited blocks, newline statement termination, `#` line comments, double-quoted strings with escapes and no line spanning, integer and decimal numbers with no leading or trailing dot, letter-or-underscore identifiers. Logical negation is the `not` keyword. A bare `!` is a lexical error. Token output format frozen. Added `scan` for name-and-value state inspection, distinct from `report`'s value-only output. Added underscore digit separators in numeric literals, valid only between two digits. |
+| Lab 2 | Expression grammar added: `+ -` (loosest), then `* /`, then prefix `not` and `-`, then literals and parenthesized groups. Binary operators are left-associative. `--parse` prints one prefix-form tree per line. One expression per line, and an expression cannot span lines. A file with no expressions is rejected. The REPL now also parses each line and prints its tree after the tokens. Equality, comparison, `and`, `or`, and identifiers are not parsed yet. |
