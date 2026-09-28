@@ -86,9 +86,8 @@ fun runPrompt() {
         } catch (e: Parser.ParseError) {
             // Error message and hadError flag were already set inside Parser's error() function.
         }
-
-        }
     }
 }
+
 
 fun scan(source: String): List<Token> = Scanner(source).scanTokens()
