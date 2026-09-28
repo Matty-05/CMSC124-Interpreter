@@ -240,15 +240,16 @@ Message format:
 
 Diagnostics are written to stderr. The scanner keeps going after an error
 rather than stopping at the first one, so a file with several problems reports
-all of them in one run. Only once the whole file has been scanned does the
-driver decide what to do with the token stream: a clean file prints its tokens
-to stdout and exits 0, and a rejected file prints nothing at all to stdout and
-exits 65. Nothing about a rejected file belongs on stdout, so every `.expected`
-file for a rejection case is empty.
+all of them in one run. The tokens print to stdout either way: a clean file
+exits 0, and a file with an error still prints the tokens the scanner managed
+to produce and then exits 65. The exit code is what marks a file as rejected.
+Showing the tokens lets you see what the scanner made of the rest of the file.
+A character or string that caused an error produces no token, except an
+invalid escape, where the string is still emitted without the bad escape.
 
-The REPL follows the same rule one line at a time. A line that scans cleanly
-prints its tokens; a line with an error prints only the diagnostic. Either way
-the prompt comes back, since a bad line must not end the session.
+The REPL does the same one line at a time: the diagnostic first, then the
+line's tokens. Either way the prompt comes back, since a bad line must not end
+the session.
 
 | Failure | Exit code |
 |---|---|
@@ -272,47 +273,43 @@ Exit 70 is reserved for runtime errors and is unused until Lab 3.
 | tests/lab4 | Context | inline | none |
 | tests/lab5 | Functions | inline | none |
 
-What each Lab 1 test proves:
+Lab 1 tests hold one case per file, grouped by token category, so each file
+name says what it checks (`tests/lab1/numbers/leading-dot.mata`,
+`tests/lab1/errors/separator-trailing.mata`). The harness finds them
+recursively, and the one `manifest.json` in `tests/lab1` covers every subfolder.
 
 ```
-keywords.mata            all fifteen keywords resolve to their own types, and
-                         an identifier that begins with a keyword (iffy) stays
-                         one identifier
-identifiers.mata         a leading underscore makes a name, not a number
-                         (_1000), a bare _ is a name, a keyword prefix is a
-                         name (unitary), and count and Count stay distinct
-operators.mata           every single-character token type
-multichar.mata           ==, !=, <=, >= each with their one-character version
-                         nearby, so maximal munch is exercised both ways, and
-                         again with no spaces so the operands cannot separate
-                         them
-slashes.mata             / stays division next to a # comment, and // is two
-                         SLASH tokens rather than a comment
-numbers.mata             integers, decimals, a number followed by a non-digit,
-                         both dot rules, and digit separators
-comments.mata            full-line, trailing, and a comment at end of file with
-                         no trailing newline
-multiline.mata           line numbers surviving blank lines, a comment, and a
-                         string literal
-empty.mata               an empty file produces only EOF
-escapes.mata             all four escape sequences, lexeme against literal
-empty-string.mata        an empty string literal
-scan.mata                the scan keyword against a number and a boolean
-sample-code.mata         the sample program in this document
-
-unterminated             rejection: a string with no closing quote
-string-multiline         rejection: a newline inside a string literal
-invalid-escape           rejection: an unrecognized escape character
-separator-trailing       rejection: a number ending in an underscore
-separator-misplaced      rejection: a run of separators (1__000) and one
-                         against the decimal point (1_.5), with a valid
-                         1_000_000 alongside to show the rule is not blanket
-unexpected-char          rejection: a character that cannot begin any lexeme
-bang                     rejection: a bare !, which Nier spells not
+numbers/       integers, zero, decimals, both dot rules (3. and .5 are not
+               numbers), 42abc splitting, 42+1 with no spaces, separators,
+               and 1._5 scanning as 1 . _5 since _5 is a name
+strings/       a basic string, the empty string, each escape on its own, and
+               a # inside a string staying part of the string
+identifiers/   a plain name, _1000 and _ as names, an underscore and a digit
+               inside a name, a keyword prefix (unitary), case sensitivity
+               (count vs Count), and Unit staying a name
+keywords/      one file per keyword, all fifteen
+operators/     one file per single- and two-character operator, maximal
+               munch with no spaces (a<=b), and // as two SLASH tokens
+comments/      full-line, trailing, end of file with no newline, and a / or
+               a quote inside a comment
+lines/         empty file, blank lines, a comment line, tabs, CRLF line
+               endings
+programs/      the sample program below and a control-flow program
+errors/        every rejection: unterminated string, string across lines,
+               invalid escape, trailing / doubled / before-dot separators,
+               a bare !, an unexpected character, a backslash right before
+               end of file, and two errors in one file (the scanner keeps
+               going and reports both)
 ```
 
-Every rejection case pairs an empty `.expected` with a `.exit` holding 65,
-which is what the stdout rule above requires.
+Every file in `errors/` pairs a `.expected` holding the tokens the scanner still
+produced with a `.exit` holding 65. The exact diagnostic goes in a
+`# expect error:` comment at the top of the `.mata` file. Sidecar mode does not
+check stderr, so these lines document the message for a reader and are not
+enforced. They use the harness's inline syntax, so they carry over if the
+folder ever switches to inline mode. A string that crosses a line reports two
+errors, because the closing quote on the next line opens a new unterminated
+string.
 
 Run locally with:
 

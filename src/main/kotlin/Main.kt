@@ -17,12 +17,13 @@ fun main(args: Array<String>) {
 fun runFile(path: String) {
     val source = File(path).readText()
     val tokens = scan(source)
-    // A rejected file puts nothing on stdout. The whole file is scanned first
-    // so every error is reported, then the token stream is discarded.
-    if (ErrorReporter.hadError) exitProcess(65)
+    // The whole file is scanned first, so every error is already on stderr.
+    // The tokens print either way, so a rejected file still shows what the
+    // scanner made of it; the exit code is what marks it as rejected.
     for (token in tokens) {
         println(token)
     }
+    if (ErrorReporter.hadError) exitProcess(65)
     exitProcess(0)
 }
 
@@ -71,12 +72,21 @@ fun runPrompt() {
         ErrorReporter.hadError = false
         val scanner = Scanner(line)
         val tokens = scanner.scanTokens()
+        // Unlike a file, the REPL shows the tokens even when the line has an
+        // error. The diagnostics print first, during the scan, so the user sees
+        // what went wrong and what the scanner still made of the rest. The
+        // error is not fatal, so the prompt comes back either way.
+        for (token in tokens) {
+            println(token)
+        }
         val parser = Parser(tokens)
         try {
             val expr = parser.parse()
             if (!ErrorReporter.hadError) println(AstPrinter.print(expr))
         } catch (e: Parser.ParseError) {
             // Error message and hadError flag were already set inside Parser's error() function.
+        }
+
         }
     }
 }

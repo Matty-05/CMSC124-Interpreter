@@ -1,0 +1,4 @@
+Token(type=NUMBER, lexeme=1, literal=1.0, line=1)
+Token(type=DOT, lexeme=., literal=null, line=1)
+Token(type=IDENTIFIER, lexeme=_5, literal=null, line=1)
+Token(type=EOF, lexeme=, literal=null, line=1)

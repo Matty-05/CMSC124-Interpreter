@@ -1,0 +1,2 @@
+# Keep CRLF bytes so the scanner is tested against Windows line endings.
+tests/lab1/lines/crlf.mata -text
