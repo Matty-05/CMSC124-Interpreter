@@ -88,13 +88,24 @@ class Parser(private val tokens: List<Token>) {
         }
         return expr
     }
-    
-    // and → term ( "and" term )*
-    private fun and(): Expr {
+
+    // comparison → term ( ( ">" | ">=" | "<" | "<=" ) term )*
+    private fun comparison(): Expr {
         var expr = term()
-        while (match(TokenType.AND)) {
+        while (match(TokenType.GREATER, TokenType.GREATER_EQUAL, TokenType.LESS, TokenType.LESS_EQUAL)) {
             val operator = previous()
             val right = term()
+            expr = Expr.Binary(expr, operator, right)
+        }
+        return expr
+    }
+
+    // and → comparison ( "and" comparison )*
+    private fun and(): Expr {
+        var expr = comparison()
+        while (match(TokenType.AND)) {
+            val operator = previous()
+            val right = comparison()
             expr = Expr.Binary(expr, operator, right)
         }
         return expr
