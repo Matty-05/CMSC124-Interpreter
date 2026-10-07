@@ -69,22 +69,18 @@ fun runPrompt() {
         val line = readlnOrNull() ?: break
         if (line.isBlank()) continue
         if (line.trim().lowercase() in listOf("exit", "quit")) break
+
         ErrorReporter.hadError = false
-        val scanner = Scanner(line)
-        val tokens = scanner.scanTokens()
-        // Unlike a file, the REPL shows the tokens even when the line has an
-        // error. The diagnostics print first, during the scan, so the user sees
-        // what went wrong and what the scanner still made of the rest. The
-        // error is not fatal, so the prompt comes back either way.
-        for (token in tokens) {
-            println(token)
-        }
+        val tokens = Scanner(line).scanTokens()
+
+        if (ErrorReporter.hadError) continue // scanner already reported it; don't attempt to parse garbage tokens
+
         val parser = Parser(tokens)
         try {
             val expr = parser.parse()
             if (!ErrorReporter.hadError) println(AstPrinter.print(expr))
         } catch (e: Parser.ParseError) {
-            // Error message and hadError flag were already set inside Parser's error() function.
+            // Already reported inside Parser's error() function.
         }
     }
 }
