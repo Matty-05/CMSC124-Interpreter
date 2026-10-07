@@ -39,6 +39,7 @@ class Parser(private val tokens: List<Token>) {
 
     class ParseError : RuntimeException()
 
+    // primary → NUMBER | STRING | "active" | "inactive" | "void" | "(" expression ")"
     private fun primary(): Expr {
         if (match(TokenType.NUMBER, TokenType.STRING)) {
             return Expr.Literal(previous().literal)
@@ -56,6 +57,7 @@ class Parser(private val tokens: List<Token>) {
         throw error(peek(), "Expect expression.")
     }
 
+    // unary → ( "not" | "-" ) unary | primary
     private fun unary(): Expr {
         if (match(TokenType.NOT, TokenType.MINUS)) {
             val operator = previous()
@@ -65,6 +67,7 @@ class Parser(private val tokens: List<Token>) {
         return primary()
     }
 
+    // factor → unary ( ( "/" | "*" ) unary )*
     private fun factor(): Expr {
         var expr = unary()
         while (match(TokenType.SLASH, TokenType.STAR)) {
@@ -74,7 +77,8 @@ class Parser(private val tokens: List<Token>) {
         }
         return expr
     }
-
+    
+    // term → factor ( ( "-" | "+" ) factor )*
     private fun term(): Expr {
         var expr = factor()
         while (match(TokenType.MINUS, TokenType.PLUS)) {
@@ -84,8 +88,31 @@ class Parser(private val tokens: List<Token>) {
         }
         return expr
     }
+    
+    // and → term ( "and" term )*
+    private fun and(): Expr {
+        var expr = term()
+        while (match(TokenType.AND)) {
+            val operator = previous()
+            val right = term()
+            expr = Expr.Binary(expr, operator, right)
+        }
+        return expr
+    }
 
-    private fun expression(): Expr = term()
+    // or → and ( "or" and )*
+    private fun or(): Expr {
+        var expr = and()
+        while (match(TokenType.OR)) {
+            val operator = previous()
+            val right = and()
+            expr = Expr.Binary(expr, operator, right)
+        }
+        return expr
+    }
+
+    // expression → or
+    private fun expression(): Expr = or()
 
     fun parse(): Expr {
         val expr = expression()
