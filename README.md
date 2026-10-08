@@ -62,27 +62,26 @@ kept deliberately small. Keywords are reserved in all contexts.
 | Operator | Category | Operands | Associativity | Precedence |
 |---|---|---|---|---|
 | `=` | assignment | binary | not parsed yet | not parsed yet |
-| `or` | logical | binary | not parsed yet | not parsed yet |
-| `and` | logical | binary | not parsed yet | not parsed yet |
-| `==` | equality | binary | not parsed yet | not parsed yet |
-| `!=` | equality | binary | not parsed yet | not parsed yet |
-| `<` | comparison | binary | not parsed yet | not parsed yet |
-| `<=` | comparison | binary | not parsed yet | not parsed yet |
-| `>` | comparison | binary | not parsed yet | not parsed yet |
-| `>=` | comparison | binary | not parsed yet | not parsed yet |
-| `+` | arithmetic | binary | left | 1 |
-| `-` | arithmetic | binary | left | 1 |
-| `*` | arithmetic | binary | left | 2 |
-| `/` | arithmetic | binary | left | 2 |
-| `not` | logical | unary | right | 3 |
-| `-` | arithmetic negation | unary | right | 3 |
+| `or` | logical | binary | left | 1 |
+| `and` | logical | binary | left | 2 |
+| `==` | equality | binary | left | 3 |
+| `!=` | equality | binary | left | 3 |
+| `<` | comparison | binary | left | 4 |
+| `<=` | comparison | binary | left | 4 |
+| `>` | comparison | binary | left | 4 |
+| `>=` | comparison | binary | left | 4 |
+| `+` | arithmetic | binary | left | 5 |
+| `-` | arithmetic | binary | left | 5 |
+| `*` | arithmetic | binary | left | 6 |
+| `/` | arithmetic | binary | left | 6 |
+| `not` | logical | unary | right | 7 |
+| `-` | arithmetic negation | unary | right | 7 |
 
 Category and operand count are settled as of Lab 1. Precedence runs from 1
-(loosest) to 3 (tightest) and is encoded in the grammar below: each level's rule
-calls the next tighter one. The operators marked "not parsed yet" are scanned
-but have no grammar rule, so a line that uses one is rejected. Unary operators
-are listed as right-associative because they nest to the right: `- -1` is
-`-(-1)`.
+(loosest) to 7 (tightest) and is encoded in the grammar below: each level's rule
+calls the next tighter one. Assignment is not parsed yet, since it belongs to
+statements, which arrive in Lab 4. Unary operators are listed as
+right-associative because they nest to the right: `- -1` is `-(-1)`.
 
 `-` appears twice, as binary subtraction and as unary negation. The scanner
 emits the same `MINUS` token for both. Distinguishing them is the parser's
@@ -189,7 +188,7 @@ loops in `term` and `factor` build the tree left to right, so `1 - 2 - 3` is
 `(1 - 2) - 3`. `unary` calls itself, so prefix operators stack (`not not
 active`, `- -1`).
 
-`not` sits at the same level as unary `-`, above `*` and `/`. It applies only to
+`not` sits at the same level as unary `-`, the tightest operator level. It applies only to
 the operand directly after it, so `not 1 + 2` is `(not 1) + 2`.
 
 ### Splitting rule
@@ -312,9 +311,10 @@ invalid escape, where the string is still emitted without the bad escape.
 happens. Otherwise every line is parsed, and the parsed trees are printed only
 if no line failed, so a rejected file prints nothing to stdout.
 
-The REPL works one line at a time. It prints the diagnostics first, then the
-line's tokens, then the parsed tree if the line had no errors. Either way the
-prompt comes back, since a bad line must not end the session.
+The REPL works one line at a time and prints each line's parsed tree. A line
+with a lexical error prints only that error, without trying to parse it, and a
+line with a syntax error prints only the parser's error. Either way the prompt
+comes back, since a bad line must not end the session.
 
 | Failure | Exit code |
 |---|---|
@@ -381,16 +381,21 @@ string.
 Lab 2 tests follow the same layout, one case per file, run with `--parse`:
 
 ```
-literals/      one file per literal: number, decimal, string, active,
-               inactive, void
+literals/      one file per literal: number, string, active, inactive, void
 unary/         chained unary operators (- -1, not not active)
 grouping/      a group that changes the tree ((2 + 3) * 4) and a redundant
                one (((((1)))))
-precedence/    * before + (1 + 2 * 3) and left associativity (1 - 2 - 3)
+precedence/    * before + (1 + 2 * 3), left associativity (1 - 2 - 3), and
+               one expression that uses every level at once
+comparison/    each comparison operator, comparison below + and *, and left
+               associativity (1 < 2 < 3)
+equality/      == and !=, equality below comparison (1 < 2 == 3 > 4), left
+               associativity, and equality above and
+logical/       and, or, and and binding tighter than or
 lines/         two expressions on two lines, and an expression that tries to
                continue onto the next line (rejected)
-errors/        an unclosed parenthesis, a missing right operand, a token that
-               can't begin an expression, and a bad line after a good one
+errors/        an unclosed parenthesis, a missing right operand, a bad line
+               after a good one, and two bad lines that are both reported
 empty/         a file with only a comment, which is rejected
 ```
 
@@ -476,12 +481,12 @@ Nier already ends statements with a newline instead of a semicolon, so we made `
   uses Kotlin's `isLetter()`, which accepts any Unicode letter. `café` is
   currently a valid identifier. The scanner is more permissive than this
   document says.
-- Equality, comparison, `and`, `or`, `=`, and identifiers are scanned but not
-  parsed yet. A line that uses one is rejected, e.g. `1 < 2` reports
-  `Error at '<': Expect end of expression.`
+- Assignment (`=`) and identifiers are scanned but not parsed yet; they arrive
+  with statements in Lab 4. A line that uses one is rejected, e.g. `x + 1`
+  reports `Error at 'x': Expect expression.`
 - An expression cannot span lines, even inside parentheses.
-- `not` binds tighter than `+` and `*`, so `not 1 + 2` parses as
-  `(+ (not 1.0) 2.0)`.
+- `not` binds tighter than every binary operator, so `not 1 + 2` parses as
+  `(+ (not 1.0) 2.0)` and `not 1 == 2` as `(== (not 1.0) 2.0)`.
 - Strings print without quotes, so the string `"1.0"` and the number `1` both
   print as `1.0`.
 - Numbers print with Kotlin's `Double.toString()`, which switches to scientific
@@ -491,13 +496,10 @@ Nier already ends statements with a newline instead of a semicolon, so we made `
   and a syntax error reports only the lexical one.
 - The error for an empty or comment-only file always says line 1, even when the
   comment is further down.
-- The REPL still parses a line that had a lexical error, so it can show a
-  second, parser error: `unit y = !x` also reports
-  `Error at 'unit': Expect expression.`
 
 ## Changelog
 
 | Activity | What changed in the language |
 |---|---|
 | Lab 1 | Nier defined: 15 keywords, brace-delimited blocks, newline statement termination, `#` line comments, double-quoted strings with escapes and no line spanning, integer and decimal numbers with no leading or trailing dot, letter-or-underscore identifiers. Logical negation is the `not` keyword. A bare `!` is a lexical error. Token output format frozen. Added `scan` for name-and-value state inspection, distinct from `report`'s value-only output. Added underscore digit separators in numeric literals, valid only between two digits. |
-| Lab 2 | Expression grammar added: `+ -` (loosest), then `* /`, then prefix `not` and `-`, then literals and parenthesized groups. Binary operators are left-associative. `--parse` prints one prefix-form tree per line. One expression per line, and an expression cannot span lines. A file with no expressions is rejected. The REPL now also parses each line and prints its tree after the tokens. Equality, comparison, `and`, `or`, and identifiers are not parsed yet. |
+| Lab 2 | Expression grammar added, loosest to tightest: `or`, `and`, `== !=`, `< <= > >=`, `+ -`, `* /`, then prefix `not` and `-`, then literals and parenthesized groups. Every binary operator is left-associative. `--parse` prints one prefix-form tree per line. One expression per line, and an expression cannot span lines. A file with no expressions is rejected. Each line is parsed on its own, so every bad line is reported. The REPL prints each line's parsed tree. Assignment and identifiers are not parsed yet. |
