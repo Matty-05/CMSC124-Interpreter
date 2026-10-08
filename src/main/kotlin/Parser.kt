@@ -100,12 +100,23 @@ class Parser(private val tokens: List<Token>) {
         return expr
     }
 
-    // and → comparison ( "and" comparison )*
-    private fun and(): Expr {
+    // equality → comparison ( ( "!=" | "==" ) comparison )*
+    private fun equality(): Expr {
         var expr = comparison()
-        while (match(TokenType.AND)) {
+        while (match(TokenType.BANG_EQUAL, TokenType.EQUAL_EQUAL)) {
             val operator = previous()
             val right = comparison()
+            expr = Expr.Binary(expr, operator, right)
+        }
+        return expr
+    }
+
+    // and → equality ( "and" equality )*
+    private fun and(): Expr {
+        var expr = equality()
+        while (match(TokenType.AND)) {
+            val operator = previous()
+            val right = equality()
             expr = Expr.Binary(expr, operator, right)
         }
         return expr
