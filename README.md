@@ -169,9 +169,10 @@ committed `.expected` file is compared against this format byte for byte.
 ## Grammar
 
 ```
-expression → or
-or         → and ( "or" and )*
-and        → term ( "and" term )*
+expression → or ;
+or         → and ( "or" and )* ;
+and        → comparison ( "and" comparison )* ;
+comparison → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
 term       → factor ( ( "+" | "-" ) factor )* ;
 factor     → unary ( ( "*" | "/" ) unary )* ;
 unary      → ( "not" | "-" ) unary
