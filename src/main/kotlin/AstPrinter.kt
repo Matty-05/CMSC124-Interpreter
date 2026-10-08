@@ -1,4 +1,6 @@
 object AstPrinter {
+    // Walks any Expr node and returns its prefix-parenthesized string form,
+    // e.g. (+ 1.0 2.0). One branch per node type defined in Expr.kt.
     fun print(expr: Expr): String {
         return when (expr) {
             is Expr.Literal -> stringify(expr.value)
@@ -8,6 +10,7 @@ object AstPrinter {
         }
     }
 
+    // Builds "(name child1 child2 ...)" by recursively printing each child.
     private fun parenthesize(name: String, vararg exprs: Expr): String {
         val sb = StringBuilder()
         sb.append("(").append(name)
@@ -19,6 +22,8 @@ object AstPrinter {
         return sb.toString()
     }
 
+    // Converts a literal's raw value into its printed form.
+    // Doubles always show a decimal point (4 -> "4.0"); null prints as "void".
     private fun stringify(value: Any?): String {
         if (value == null) return "void"
         return value.toString()
