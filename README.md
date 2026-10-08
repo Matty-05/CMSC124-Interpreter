@@ -171,7 +171,8 @@ committed `.expected` file is compared against this format byte for byte.
 ```
 expression → or ;
 or         → and ( "or" and )* ;
-and        → comparison ( "and" comparison )* ;
+and        → equality ( "and" equality )* ;
+equality   → comparison ( ( "!=" | "==" ) comparison )* ;
 comparison → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
 term       → factor ( ( "+" | "-" ) factor )* ;
 factor     → unary ( ( "*" | "/" ) unary )* ;
