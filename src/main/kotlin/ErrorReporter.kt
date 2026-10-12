@@ -1,6 +1,10 @@
 object ErrorReporter {
     var hadError = false
 
+    fun runtimeError(error: RuntimeError) {
+        System.err.println("[line ${error.token.line}] RuntimeError at '${error.token.lexeme}': ${error.message}")
+    }
+
     fun error(line: Int, message: String) {
         hadError = true
         System.err.println("[line $line] Error: $message")
