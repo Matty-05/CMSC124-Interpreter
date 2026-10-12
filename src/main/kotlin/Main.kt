@@ -5,10 +5,11 @@ fun main(args: Array<String>) {
     when {
         args.size == 2 && args[0] == "--tokenize" -> runFile(args[1])
         args.size == 2 && args[0] == "--parse" -> runParseFile(args[1])
+        args.size == 2 && args[0] == "--eval" -> runEvalFile(args[1])
         args.isEmpty() -> runPrompt()
         args.size == 1 && !args[0].startsWith("--") -> runProgram(args[0])
         else -> {
-            System.err.println("Usage: run [--tokenize <path>] [--parse <path>]")
+            System.err.println("Usage: run [<path> | --tokenize <path> | --parse <path> | --eval <path>]")
             exitProcess(64)
         }
     }
@@ -53,6 +54,35 @@ fun runParseFile(path: String) {
     if (ErrorReporter.hadError) exitProcess(65)
     output.forEach(::println)
     exitProcess(0)
+}
+
+fun runEvalFile(path: String) {
+    ErrorReporter.hadError = false
+    val tokens = Scanner(File(path).readText()).scanTokens()
+    if (ErrorReporter.hadError) exitProcess(65)
+
+    val realTokens = tokens.dropLast(1)
+    if (realTokens.isEmpty()) {
+        ErrorReporter.error(1, "Expect expression.")
+        exitProcess(65)
+    }
+
+    val expressions = mutableListOf<Expr>()
+    for ((line, lineTokens) in realTokens.groupBy { it.line }) {
+        try {
+            expressions += Parser(lineTokens + Token(TokenType.EOF, "", null, line)).parse()
+        } catch (e: Parser.ParseError) {
+            // Already reported inside Parser.error().
+        }
+    }
+    if (ErrorReporter.hadError) exitProcess(65)
+
+    try {
+        for (expr in expressions) println(Evaluator.stringify(Evaluator.evaluate(expr)))
+    } catch (e: RuntimeError) {
+        ErrorReporter.runtimeError(e)
+        exitProcess(70)
+    }
 }
 
 fun runProgram(path: String) {
