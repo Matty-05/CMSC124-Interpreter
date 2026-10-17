@@ -33,11 +33,11 @@ class Parser(private val tokens: List<Token>) {
     }
 
     private fun error(token: Token, message: String): ParseError {
-        ErrorReporter.error(token, message)
-        return ParseError()
+        val where = if (token.type == TokenType.EOF) "end" else "'${token.lexeme}'"
+        return ParseError("[line ${token.line}] Error at $where: $message")
     }
 
-    class ParseError : RuntimeException()
+    class ParseError(message: String) : RuntimeException(message)
 
     // primary → NUMBER | STRING | "active" | "inactive" | "void" | "(" expression ")"
     private fun primary(): Expr {
