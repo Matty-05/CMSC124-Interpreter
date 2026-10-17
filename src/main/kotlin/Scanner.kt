@@ -1,5 +1,6 @@
 class Scanner(private val source: String) {
     private val tokens = mutableListOf<Token>()
+    private val errors = mutableListOf<String>()
     private var start = 0
     private var current = 0
     private var line = 1
@@ -30,7 +31,16 @@ class Scanner(private val source: String) {
             scanToken()
         }
         tokens.add(Token(TokenType.EOF, "", null, line))
+        if (errors.isNotEmpty()) throw ScanError(tokens.toList(), errors.toList())
         return tokens
+    }
+
+    // Keep scanning after a mistake so callers receive all diagnostics and tokens.
+    class ScanError(val tokens: List<Token>, val errors: List<String>) :
+        RuntimeException(errors.joinToString("\n"))
+
+    private fun error(line: Int, message: String) {
+        errors += "[line $line] Error: $message"
     }
 
     private fun isAtEnd(): Boolean = current >= source.length
@@ -76,7 +86,7 @@ class Scanner(private val source: String) {
             '=' -> addToken(if (match('=')) TokenType.EQUAL_EQUAL else TokenType.EQUAL)
             '!' -> {
                 if (match('=')) addToken(TokenType.BANG_EQUAL)
-                else ErrorReporter.error(line, "Unexpected character '!'. Use 'not' for negation.")
+                else error(line, "Unexpected character '!'. Use 'not' for negation.")
             }
             '<' -> addToken(if (match('=')) TokenType.LESS_EQUAL else TokenType.LESS)
             '>' -> addToken(if (match('=')) TokenType.GREATER_EQUAL else TokenType.GREATER)
@@ -97,7 +107,7 @@ class Scanner(private val source: String) {
                 when {
                     c.isDigit() -> number()
                     isAlpha(c) -> identifier()
-                    else -> ErrorReporter.error(line, "Unexpected character '$c'.")
+                    else -> error(line, "Unexpected character '$c'.")
                 }
             }
         }
@@ -141,9 +151,9 @@ class Scanner(private val source: String) {
             if (before.isDigit() && after.isDigit()) continue
 
             if (i == lexeme.length - 1) {
-                ErrorReporter.error(line, "A number can't end with a separator.")
+                error(line, "A number can't end with a separator.")
             } else {
-                ErrorReporter.error(line, "A digit separator has to sit between two digits.")
+                error(line, "A digit separator has to sit between two digits.")
             }
             return false
         }
@@ -155,14 +165,14 @@ class Scanner(private val source: String) {
         val sb = StringBuilder()
         while (peek() != '"' && !isAtEnd()) {
             if (peek() == '\n'){
-                ErrorReporter.error(startLine, "Strings may not span multiple lines.")
+                error(startLine, "Strings may not span multiple lines.")
                 return
             }
             if (peek() == '\\') {
                 advance()
 
                 if (isAtEnd()) {
-                    ErrorReporter.error(startLine, "Unterminated string.")
+                    error(startLine, "Unterminated string.")
                     return
                 }
 
@@ -172,7 +182,7 @@ class Scanner(private val source: String) {
                     't' -> sb.append('\t')
                     '"' -> sb.append('"') 
                     '\\' -> sb.append('\\')
-                    else -> ErrorReporter.error(line, "Invalid escape sequence '\\$escapeCharacter'.")
+                    else -> error(line, "Invalid escape sequence '\\$escapeCharacter'.")
                 }
 
             } else {
@@ -181,7 +191,7 @@ class Scanner(private val source: String) {
         }
 
         if (isAtEnd()) {
-            ErrorReporter.error(startLine, "Unterminated string.")
+            error(startLine, "Unterminated string.")
             return
         }
 
