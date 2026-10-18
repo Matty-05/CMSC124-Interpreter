@@ -168,6 +168,7 @@ committed `.expected` file is compared against this format byte for byte.
 ## Grammar
 
 ```
+program    → expression* EOF ;     (one expression per line)
 expression → or ;
 or         → and ( "or" and )* ;
 and        → equality ( "and" equality )* ;
@@ -181,6 +182,11 @@ primary    → NUMBER | STRING | "active" | "inactive" | "void"
            | "(" expression ")" ;
 ```
 
+`program` is the parser's entry point, `parse()`. It parses the whole file and
+returns the list of expressions in it. Each expression must end where its line
+ends: since the scanner does not emit a token for newlines, a token on a later
+line marks the end of the expression, the way a `;` would in other languages.
+
 Each rule matches one function in `Parser.kt` with the same name. A rule only
 calls the rule for the next tighter level, which is what makes the grammar
 unambiguous: `1 + 2 * 3` can only come out as `1 + (2 * 3)`. The `( ... )*`
@@ -193,9 +199,8 @@ the operand directly after it, so `not 1 + 2` is `(not 1) + 2`.
 
 ### Splitting rule
 
-A file holds one expression per line. The whole file is scanned first, then the
-tokens are grouped by the line they came from and each group is parsed as its
-own expression.
+A file holds one expression per line. The whole file is scanned, and the parser
+reads all of its tokens, ending each expression where its line ends.
 
 - Blank lines and comment-only lines hold no tokens, so they are skipped.
 - An expression cannot continue onto the next line, even inside parentheses.
@@ -205,8 +210,8 @@ own expression.
   to end after the first one.
 - A file with no expressions at all, including one with only comments, is
   rejected.
-- Every line is parsed even after an earlier line fails, so each bad line gets
-  its own diagnostic.
+- After a syntax error the parser skips the rest of that line and starts again
+  on the next one (`synchronize()`), so each bad line gets its own diagnostic.
 
 ## Parse output format
 
@@ -302,8 +307,9 @@ Error handling uses exceptions instead of a shared global error flag.
 The scanner collects diagnostics on its own instance and throws `Scanner.ScanError`
 with the collected tokens and messages when scanning finishes. The parser throws
 `Parser.ParseError` with a diagnostic message. The command-line functions catch
-these exceptions and print their messages to stderr. `runParseFile` collects
-per-line parse errors before rejecting the file, so every bad line is still reported.
+these exceptions and print their messages to stderr. The parser collects the
+error from each bad line and keeps going, then throws them together, so every
+bad line is still reported.
 
 Diagnostics are written to stderr. The scanner keeps going after an error
 rather than stopping at the first one, so a file with several problems reports
@@ -315,8 +321,8 @@ A character or string that caused an error produces no token, except an
 invalid escape, where the string is still emitted without the bad escape.
 
 `--parse` is stricter. A lexical error rejects the file before any parsing
-happens. Otherwise every line is parsed, and the parsed trees are printed only
-if no line failed, so a rejected file prints nothing to stdout.
+happens. Otherwise the parser reads the whole file, and the parsed trees are
+printed only if no line failed, so a rejected file prints nothing to stdout.
 
 The REPL works one line at a time and prints each line's parsed tree. A line
 with a lexical error prints only that error, without trying to parse it, and a
@@ -470,7 +476,7 @@ Nier's stated purpose is testing combat protocols safely, and safe testing means
 Long numbers are hard to read at a glance, since 1000000 and 10000000 look almost the same. Java, Kotlin, Python, and Rust all added separators for this reason so we did the same. We require every separator to have a digit on both sides, so 1_000_, 1__000, and 1_.5 are all errors. A separator that divides nothing is almost certainly a typo, and accepting it silently would hide the mistake. Checking both sides rather than just the end also keeps the scanner honest against its own documentation, since a rule written as "between digits" should be the rule the code enforces. We left leading underscores alone since _1000 already scans as an identifier, and overriding that would mean special casing a rule we already have.
 
 - One expression per line
-Nier already ends statements with a newline instead of a semicolon, so we made `--parse` follow the same rule. We split on the line numbers the scanner already records instead of on the raw text, so every diagnostic keeps its real line number. Not letting an expression continue past the end of a line means a missing operand is caught on the line where it happened, instead of silently pulling in the next line.
+Nier already ends statements with a newline instead of a semicolon, so we made `--parse` follow the same rule. The parser reads the whole file's tokens and uses the line numbers the scanner already records to tell where each expression ends, so every diagnostic keeps its real line number. Not letting an expression continue past the end of a line means a missing operand is caught on the line where it happened, instead of silently pulling in the next line.
 
 - `not` at the unary level
 `not` and unary `-` are both prefix operators that take one operand, so they share one rule. This keeps the grammar to a single unary level. The cost is that `not` binds tighter than arithmetic, which we note under known limitations.
@@ -509,4 +515,4 @@ Nier already ends statements with a newline instead of a semicolon, so we made `
 | Activity | What changed in the language |
 |---|---|
 | Lab 1 | Nier defined: 15 keywords, brace-delimited blocks, newline statement termination, `#` line comments, double-quoted strings with escapes and no line spanning, integer and decimal numbers with no leading or trailing dot, letter-or-underscore identifiers. Logical negation is the `not` keyword. A bare `!` is a lexical error. Token output format frozen. Added `scan` for name-and-value state inspection, distinct from `report`'s value-only output. Added underscore digit separators in numeric literals, valid only between two digits. |
-| Lab 2 | Expression grammar added, loosest to tightest: `or`, `and`, `== !=`, `< <= > >=`, `+ -`, `* /`, then prefix `not` and `-`, then literals and parenthesized groups. Every binary operator is left-associative. `--parse` prints one prefix-form tree per line. One expression per line, and an expression cannot span lines. A file with no expressions is rejected. Each line is parsed on its own, so every bad line is reported. The REPL prints each line's parsed tree. Assignment and identifiers are not parsed yet. |
+| Lab 2 | Expression grammar added, loosest to tightest: `or`, `and`, `== !=`, `< <= > >=`, `+ -`, `* /`, then prefix `not` and `-`, then literals and parenthesized groups. Every binary operator is left-associative. `--parse` prints one prefix-form tree per line. One expression per line, and an expression cannot span lines. A file with no expressions is rejected. The parser reads the whole file and recovers at the next line after an error, so every bad line is reported. The REPL prints each line's parsed tree. Assignment and identifiers are not parsed yet. |

@@ -1,5 +1,9 @@
 class Parser(private val tokens: List<Token>) {
     private var current = 0
+    private var exprLine = 0   // the line of the expression being parsed
+
+    // True at the end of the file, or when the next token is on a later line.
+    private fun atLineEnd(): Boolean = isAtEnd() || peek().line != exprLine
 
     private fun isAtEnd(): Boolean = peek().type == TokenType.EOF
 
@@ -13,7 +17,7 @@ class Parser(private val tokens: List<Token>) {
     }
 
     private fun check(type: TokenType): Boolean {
-        if (isAtEnd()) return false
+        if (atLineEnd()) return false
         return peek().type == type
     }
 
@@ -33,8 +37,11 @@ class Parser(private val tokens: List<Token>) {
     }
 
     private fun error(token: Token, message: String): ParseError {
-        val where = if (token.type == TokenType.EOF) "end" else "'${token.lexeme}'"
-        return ParseError("[line ${token.line}] Error at $where: $message")
+        // A token past the end of this expression's line counts as "end".
+        if (token.type == TokenType.EOF || token.line != exprLine) {
+            return ParseError("[line $exprLine] Error at end: $message")
+        }
+        return ParseError("[line ${token.line}] Error at '${token.lexeme}': $message")
     }
 
     class ParseError(message: String) : RuntimeException(message)
@@ -136,9 +143,28 @@ class Parser(private val tokens: List<Token>) {
     // expression → or
     private fun expression(): Expr = or()
 
-    fun parse(): Expr {
-        val expr = expression()
-        if (!isAtEnd()) throw error(peek(), "Expect end of expression.")
-        return expr
+    // program → expression* EOF, one expression per line
+    fun parse(): List<Expr> {
+        val expressions = mutableListOf<Expr>()
+        val errors = mutableListOf<String>()
+        while (!isAtEnd()) {
+            exprLine = peek().line
+            try {
+                val expr = expression()
+                if (!atLineEnd()) throw error(peek(), "Expect end of expression.")
+                expressions += expr
+            } catch (e: ParseError) {
+                errors += e.message.orEmpty()
+                synchronize()
+            }
+        }
+        if (errors.isNotEmpty()) throw ParseError(errors.joinToString("\n"))
+        if (expressions.isEmpty()) throw ParseError("[line 1] Error: Expect expression.")
+        return expressions
+    }
+
+    // After an error, skip the rest of the line; the next line starts fresh.
+    private fun synchronize() {
+        while (!atLineEnd()) advance()
     }
 }

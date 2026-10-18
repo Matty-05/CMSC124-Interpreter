@@ -30,31 +30,8 @@ fun runFile(path: String) {
 fun runParseFile(path: String) {
     val source = File(path).readText()
     try {
-        val tokens = Scanner(source).scanTokens()
-
-        val realTokens = tokens.dropLast(1) // drop the scanner's own trailing EOF
-
-        if (realTokens.isEmpty()) {
-            throw Parser.ParseError("[line 1] Error: Expect expression.")
-        }
-
-        // Store actual AST roots. Rendering happens only after parsing succeeds.
-        val expressions = mutableListOf<Expr>()
-        val errors = mutableListOf<String>()
-        for ((line, lineTokens) in realTokens.groupBy { it.line }) {
-            val eof = Token(TokenType.EOF, "", null, line)
-            try {
-                val expression = Parser(lineTokens + eof).parse()
-                expressions += expression
-            } catch (e: Parser.ParseError) {
-                errors += e.message.orEmpty()
-            }
-        }
-
-        if (errors.isNotEmpty()) throw Parser.ParseError(errors.joinToString("\n"))
-        for (expression in expressions) {
-            println(AstPrinter.print(expression))
-        }
+        val expressions = Parser(Scanner(source).scanTokens()).parse()
+        expressions.forEach { println(AstPrinter.print(it)) }
     } catch (e: Scanner.ScanError) {
         System.err.println(e.message)
         exitProcess(65)
@@ -82,9 +59,7 @@ fun runPrompt() {
 
         try {
             val tokens = Scanner(line).scanTokens()
-            val parser = Parser(tokens)
-            val expr = parser.parse()
-            println(AstPrinter.print(expr))
+            Parser(tokens).parse().forEach { println(AstPrinter.print(it)) }
         } catch (e: Scanner.ScanError) {
             System.err.println(e.message)
         } catch (e: Parser.ParseError) {
