@@ -298,6 +298,13 @@ ran out:
 
 The last form is for a file with no expressions at all.
 
+Error handling uses exceptions instead of a shared global error flag.
+The scanner collects diagnostics on its own instance and throws `Scanner.ScanError`
+with the collected tokens and messages when scanning finishes. The parser throws
+`Parser.ParseError` with a diagnostic message. The command-line functions catch
+these exceptions and print their messages to stderr. `runParseFile` collects
+per-line parse errors before rejecting the file, so every bad line is still reported.
+
 Diagnostics are written to stderr. The scanner keeps going after an error
 rather than stopping at the first one, so a file with several problems reports
 all of them in one run. With `--tokenize`, the tokens print to stdout either way: a clean file
