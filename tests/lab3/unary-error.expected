@@ -1,0 +1,3 @@
+Token(type=MINUS, lexeme=-, literal=null, line=1)
+Token(type=VOID, lexeme=void, literal=null, line=1)
+Token(type=EOF, lexeme=, literal=null, line=2)
