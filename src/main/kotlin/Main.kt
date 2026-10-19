@@ -57,7 +57,7 @@ fun runEvalFile(path: String) {
     try {
         for (expr in expressions) println(Evaluator.stringify(Evaluator.evaluate(expr)))
     } catch (e: RuntimeError) {
-        System.err.println("[line ${e.token.line}] RuntimeError at '${e.token.lexeme}': ${e.message}")
+        System.err.println("[line ${e.token.line}] Runtime error: ${e.message}")
         exitProcess(70)
     }
 }
@@ -79,11 +79,15 @@ fun runPrompt() {
 
         try {
             val tokens = Scanner(line).scanTokens()
-            Parser(tokens).parse().forEach { println(AstPrinter.print(it)) }
+            Parser(tokens).parse().forEach {
+                println(Evaluator.stringify(Evaluator.evaluate(it)))
+            }
         } catch (e: Scanner.ScanError) {
             System.err.println(e.message)
         } catch (e: Parser.ParseError) {
             System.err.println(e.message)
+        } catch (e: RuntimeError) {
+            System.err.println("[line ${e.token.line}] Runtime error: ${e.message}")
         }
     }
 }
