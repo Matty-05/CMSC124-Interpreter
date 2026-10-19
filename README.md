@@ -464,20 +464,21 @@ empty/         a file with only a comment, which is rejected
 Every rejected lab2 file has an empty `.expected`, since `--parse` prints
 nothing for a rejected file, and a `.exit` holding 65.
 
-Lab 3 tests use inline mode: each file holds one case, with its expected
-result written in a `#` comment on the same line. The answers are worked out by
-hand before running.
+Lab 3 tests use sidecar mode, like Labs 1 and 2. Each `.mata` file has a matching
+`.expected` file, and rejected inputs also have an `.exit` file containing 65
+for a static error or 70 for a runtime error.
 
 ```
-1 + 2 * 3  # expect: 7
-"a" - 1  # expect runtime error: Operands must be numbers.
-(1 + 2  # expect error: Expect ')' after expression.
+arithmetic/add.mata
+arithmetic/add.expected
+errors/type-error.mata
+errors/type-error.expected
+errors/type-error.exit
 ```
 
-Each of those lines is its own file. A runtime error file expects exit 70 and a
-static error file expects exit 65. Error annotations name the message only,
-without the `[line N]` prefix, and each error file holds a single error, since
-evaluation stops at the first one.
+Successful tests omit `.exit` because zero is the default. Error diagnostics are
+written to stderr; their `.expected` files remain empty because sidecar output
+describes stdout.
 
 ```
 literals/      one file per value type
