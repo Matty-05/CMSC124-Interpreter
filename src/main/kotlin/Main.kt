@@ -17,70 +17,47 @@ fun main(args: Array<String>) {
 
 fun runFile(path: String) {
     val source = File(path).readText()
-    val tokens = scan(source)
-    // The whole file is scanned first, so every error is already on stderr.
-    // The tokens print either way, so a rejected file still shows what the
-    // scanner made of it; the exit code is what marks it as rejected.
-    for (token in tokens) {
-        println(token)
+    try {
+        scan(source).forEach(::println)
+    } catch (e: Scanner.ScanError) {
+        System.err.println(e.message)
+        // Token mode still shows the tokens collected from rejected input.
+        e.tokens.forEach(::println)
+        exitProcess(65)
     }
-    if (ErrorReporter.hadError) exitProcess(65)
     exitProcess(0)
 }
 
 fun runParseFile(path: String) {
     val source = File(path).readText()
-    ErrorReporter.hadError = false
-    val tokens = Scanner(source).scanTokens()
-    if (ErrorReporter.hadError) exitProcess(65)
-
-    val realTokens = tokens.dropLast(1) // drop the scanner's own trailing EOF
-
-    if (realTokens.isEmpty()) {
-        ErrorReporter.error(1, "Expect expression.")
+    try {
+        val expressions = Parser(Scanner(source).scanTokens()).parse()
+        expressions.forEach { println(AstPrinter.print(it)) }
+    } catch (e: Scanner.ScanError) {
+        System.err.println(e.message)
+        exitProcess(65)
+    } catch (e: Parser.ParseError) {
+        System.err.println(e.message)
         exitProcess(65)
     }
-
-    val output = mutableListOf<String>()
-    for ((line, lineTokens) in realTokens.groupBy { it.line }) {
-        val eof = Token(TokenType.EOF, "", null, line)
-        try {
-            output += AstPrinter.print(Parser(lineTokens + eof).parse())
-        } catch (e: Parser.ParseError) {
-            // Already reported inside Parser.error().
-        }
-    }
-    
-    if (ErrorReporter.hadError) exitProcess(65)
-    output.forEach(::println)
     exitProcess(0)
 }
 
 fun runEvalFile(path: String) {
-    ErrorReporter.hadError = false
-    val tokens = Scanner(File(path).readText()).scanTokens()
-    if (ErrorReporter.hadError) exitProcess(65)
-
-    val realTokens = tokens.dropLast(1)
-    if (realTokens.isEmpty()) {
-        ErrorReporter.error(1, "Expect expression.")
+    val expressions = try {
+        Parser(Scanner(File(path).readText()).scanTokens()).parse()
+    } catch (e: Scanner.ScanError) {
+        System.err.println(e.message)
+        exitProcess(65)
+    } catch (e: Parser.ParseError) {
+        System.err.println(e.message)
         exitProcess(65)
     }
-
-    val expressions = mutableListOf<Expr>()
-    for ((line, lineTokens) in realTokens.groupBy { it.line }) {
-        try {
-            expressions += Parser(lineTokens + Token(TokenType.EOF, "", null, line)).parse()
-        } catch (e: Parser.ParseError) {
-            // Already reported inside Parser.error().
-        }
-    }
-    if (ErrorReporter.hadError) exitProcess(65)
 
     try {
         for (expr in expressions) println(Evaluator.stringify(Evaluator.evaluate(expr)))
     } catch (e: RuntimeError) {
-        ErrorReporter.runtimeError(e)
+        System.err.println("[line ${e.token.line}] RuntimeError at '${e.token.lexeme}': ${e.message}")
         exitProcess(70)
     }
 }
@@ -100,17 +77,13 @@ fun runPrompt() {
         if (line.isBlank()) continue
         if (line.trim().lowercase() in listOf("exit", "quit")) break
 
-        ErrorReporter.hadError = false
-        val tokens = Scanner(line).scanTokens()
-
-        if (ErrorReporter.hadError) continue // scanner already reported it; don't attempt to parse garbage tokens
-
-        val parser = Parser(tokens)
         try {
-            val expr = parser.parse()
-            if (!ErrorReporter.hadError) println(AstPrinter.print(expr))
+            val tokens = Scanner(line).scanTokens()
+            Parser(tokens).parse().forEach { println(AstPrinter.print(it)) }
+        } catch (e: Scanner.ScanError) {
+            System.err.println(e.message)
         } catch (e: Parser.ParseError) {
-            // Already reported inside Parser's error() function.
+            System.err.println(e.message)
         }
     }
 }
