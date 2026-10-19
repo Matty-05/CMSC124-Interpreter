@@ -23,7 +23,7 @@ Nier is a programming language designed for YoRHa androids and other operators w
 | `./run <file>` | Executes a program. Available from Lab 4; until then it prints the team banner that `tests/lab0` checks. |
 | `./run --tokenize <file>` | Prints the token stream. |
 | `./run --parse <file>` | Parses one expression per line and prints each tree. |
-| `./run --eval <file>` | Evaluates each expression and prints its value. Available from Lab 3. |
+| `./run --eval <file>` | Evaluates each expression, one per line, and prints its value. |
 | `./run` | Starts the REPL. |
 
 Exit codes: 0 when the file scans (and, with `--parse`, parses) cleanly, 65 when the scanner or parser rejects it, 70 when a successfully parsed program fails during evaluation.
@@ -129,7 +129,9 @@ identifier instead, since underscore is a valid identifier start character, so
 - Nesting: not applicable
 - A comment may appear at the end of a line of code, as in `unit x = 4  # note`
 - Comments are discarded by the scanner and never emitted as tokens
-- Harness note: `comment_prefix` in `tests/lab*/manifest.json` is set to `#`.
+- Harness note: `tests/lab3/manifest.json` sets `comment_prefix` to `#`, since
+  its inline `# expect:` annotations live in comments. The lab1 and lab2 folders
+  use sidecar files, so they don't need it.
 
 Block comments were cut to keep the scanner's comment handling to a single
 case. Nested block comments in particular require tracking a depth counter and
@@ -168,6 +170,7 @@ committed `.expected` file is compared against this format byte for byte.
 ## Grammar
 
 ```
+program    → expression* EOF ;     (one expression per line)
 expression → or ;
 or         → and ( "or" and )* ;
 and        → equality ( "and" equality )* ;
@@ -181,6 +184,11 @@ primary    → NUMBER | STRING | "active" | "inactive" | "void"
            | "(" expression ")" ;
 ```
 
+`program` is the parser's entry point, `parse()`. It parses the whole file and
+returns the list of expressions in it. Each expression must end where its line
+ends: since the scanner does not emit a token for newlines, a token on a later
+line marks the end of the expression, the way a `;` would in other languages.
+
 Each rule matches one function in `Parser.kt` with the same name. A rule only
 calls the rule for the next tighter level, which is what makes the grammar
 unambiguous: `1 + 2 * 3` can only come out as `1 + (2 * 3)`. The `( ... )*`
@@ -193,9 +201,8 @@ the operand directly after it, so `not 1 + 2` is `(not 1) + 2`.
 
 ### Splitting rule
 
-A file holds one expression per line. The whole file is scanned first, then the
-tokens are grouped by the line they came from and each group is parsed as its
-own expression.
+A file holds one expression per line. The whole file is scanned, and the parser
+reads all of its tokens, ending each expression where its line ends.
 
 - Blank lines and comment-only lines hold no tokens, so they are skipped.
 - An expression cannot continue onto the next line, even inside parentheses.
@@ -205,8 +212,8 @@ own expression.
   to end after the first one.
 - A file with no expressions at all, including one with only comments, is
   rejected.
-- Every line is parsed even after an earlier line fails, so each bad line gets
-  its own diagnostic.
+- After a syntax error the parser skips the rest of that line and starts again
+  on the next one (`synchronize()`), so each bad line gets its own diagnostic.
 
 ## Parse output format
 
@@ -231,28 +238,100 @@ prefix form, wrapped in parentheses.
 
 ### Values and types
 
-[What runtime values exist, and how they are represented in the host
-language.]
+<<<<<<< Updated upstream
+Nier is dynamically typed. A value's type is only known when the program runs,
+so the evaluator stores every value in Kotlin's `Any?`, the type every Kotlin
+value fits into, and checks what it holds when an operator needs to know.
+
+| Nier value | Example | Stored as |
+|---|---|---|
+| Number | `42`, `3.5` | `Double`. Integers and decimals are one type. |
+| String | `"hi"` | `String` |
+| Boolean | `active`, `inactive` | `Boolean` (`true`, `false`) |
+| Nothing | `void` | `null` |
+
+The scanner already builds number literals as `Double` and the parser stores
+`active`, `inactive`, and `void` as `true`, `false`, and `null`, so values reach
+the evaluator in this form without conversion.
 
 ### Value printing
 
-- Numbers: [e.g. 5 rather than 5.0]
-- Nil: [spelling]
-- Strings: [with or without quotes]
+- Numbers: without a trailing `.0`, so `2 + 3` prints `5` and `5 / 2` prints
+  `2.5`. Very large or very small numbers keep Kotlin's scientific notation,
+  such as `1.0E7`.
+- Booleans: `active` and `inactive`, the way they are written in Nier.
+- Nil: `void`.
+- Strings: without quotes, so `"hi" + " there"` prints `hi there`.
+
+This is the `--eval` and REPL output. `--parse` keeps its own format from Lab 2,
+where numbers always show a decimal point (`4.0`) and booleans print as `true`
+and `false`.
+=======
+The evaluator represents numbers as Kotlin `Double`, strings as `String`,
+booleans as `Boolean`, and `void` as `null`.
+
+### Value printing
+
+- Numbers: omit a trailing `.0`, so `5.0` prints as `5`.
+- Nil: `void`.
+- Strings: without quotes, with escape sequences already decoded.
+- Booleans: `true` and `false`.
+>>>>>>> Stashed changes
 
 ### Truthiness
 
-[The complete rule. Which values are false in a condition; everything else is
-true.]
+`inactive` and `void` are false. Every other value is true, including `0` and
+the empty string `""`. One function, `isTruthy`, applies this rule everywhere a
+value is used as a condition: `not`, `and`, and `or` now, and `if` and `while`
+in later labs.
 
 ### Operator semantics
 
-- Arithmetic: [accepted operand types]
-- `+` on strings: [concatenation, error, or coercion]
-- Mixed types: [what happens]
+<<<<<<< Updated upstream
+- Arithmetic: `-`, `*`, and `/` take two numbers, and unary `-` takes one.
+  Anything else is a runtime error.
+- `+` on strings: two numbers add and two strings join (`"a" + "b"` is `ab`).
+  Any other pair, such as `"a" + 1`, is a runtime error rather than a silent
+  conversion, since a mixed `+` is far more likely a mistake than intent.
+- Mixed types: never converted. An operator that needs numbers rejects anything
+  else with a runtime error.
+- Comparison: `<`, `<=`, `>`, and `>=` take two numbers and produce `active` or
+  `inactive`.
+- Equality across types: `==` and `!=` accept any two values. Values of
+  different types are never equal, so `1 == "1"` is `inactive` and not an
+  error. `void == void` is `active`.
+- Logical: `not` works on any value by its truthiness. `and` and `or` produce
+  `active` or `inactive` and short-circuit: `and` skips its right side when the
+  left is false, and `or` skips it when the left is true.
+- Division by zero: a runtime error. Nier is for testing protocols safely, so a
+  division that has no real answer stops the program instead of quietly
+  producing `Infinity`.
+- Evaluation order: the left operand is always evaluated before the right.
+
+Runtime errors print on stderr as `[line N] Runtime error: <message>` and exit
+with code 70. The messages are:
+
+| Cause | Message |
+|---|---|
+| `-`, `*`, `/`, or a comparison on a non-number | `Operands must be numbers.` |
+| Unary `-` on a non-number | `Operand must be a number.` |
+| `+` on anything but two numbers or two strings | `Operands must be two numbers or two strings.` |
+| Dividing by zero | `Division by zero.` |
+=======
+- Arithmetic: unary `-` and binary `+`, `-`, `*`, `/` accept numbers only.
+- `+` on strings: runtime error; no concatenation or coercion.
+- Mixed types: runtime error at the operator token.
 - Comparison: [accepted operand types]
 - Equality across types: [false, or an error]
-- Division by zero: [value produced, or runtime error]
+- Division by zero: runtime error (including division by negative zero).
+
+The arithmetic core evaluates literals and grouping as well. Other parsed
+operators currently report an unsupported-operator runtime error.
+`--eval` follows the same one-expression-per-line splitting rule as `--parse`.
+It parses every line before evaluation; scanner or parser errors exit 65
+without value output. Evaluation prints each result in order and stops on the
+first runtime error, reporting its operator and line on stderr and exiting 70.
+>>>>>>> Stashed changes
 
 ### Scope and bindings
 
@@ -298,6 +377,14 @@ ran out:
 
 The last form is for a file with no expressions at all.
 
+Error handling uses exceptions instead of a shared global error flag.
+The scanner collects diagnostics on its own instance and throws `Scanner.ScanError`
+with the collected tokens and messages when scanning finishes. The parser throws
+`Parser.ParseError` with a diagnostic message. The command-line functions catch
+these exceptions and print their messages to stderr. The parser collects the
+error from each bad line and keeps going, then throws them together, so every
+bad line is still reported.
+
 Diagnostics are written to stderr. The scanner keeps going after an error
 rather than stopping at the first one, so a file with several problems reports
 all of them in one run. With `--tokenize`, the tokens print to stdout either way: a clean file
@@ -308,8 +395,8 @@ A character or string that caused an error produces no token, except an
 invalid escape, where the string is still emitted without the bad escape.
 
 `--parse` is stricter. A lexical error rejects the file before any parsing
-happens. Otherwise every line is parsed, and the parsed trees are printed only
-if no line failed, so a rejected file prints nothing to stdout.
+happens. Otherwise the parser reads the whole file, and the parsed trees are
+printed only if no line failed, so a rejected file prints nothing to stdout.
 
 The REPL works one line at a time and prints each line's parsed tree. A line
 with a lexical error prints only that error, without trying to parse it, and a
@@ -327,8 +414,17 @@ comes back, since a bad line must not end the session.
 | Syntax error on any line (`--parse`) | 65 |
 | File with no expressions (`--parse`) | 65 |
 | Invalid command-line arguments | 64 |
+| Runtime error (`--eval`) | 70 |
 
-Exit 70 is reserved for runtime errors and is unused until Lab 3.
+<<<<<<< Updated upstream
+A file that scans and parses but then fails while evaluating exits 70. Output
+printed before the failing line stays on stdout, since evaluation runs top to
+bottom and stops at the first runtime error.
+=======
+`--eval` exits 70 for invalid arithmetic operand types, division by zero,
+or operators not yet supported by the evaluator. Diagnostics include the
+operator token's line number.
+>>>>>>> Stashed changes
 
 ## Testing conventions
 
@@ -402,6 +498,33 @@ empty/         a file with only a comment, which is rejected
 Every rejected lab2 file has an empty `.expected`, since `--parse` prints
 nothing for a rejected file, and a `.exit` holding 65.
 
+Lab 3 tests use inline mode: each file holds one case, with its expected
+result written in a `#` comment on the same line. The answers are worked out by
+hand before running.
+
+```
+1 + 2 * 3  # expect: 7
+"a" - 1  # expect runtime error: Operands must be numbers.
+(1 + 2  # expect error: Expect ')' after expression.
+```
+
+Each of those lines is its own file. A runtime error file expects exit 70 and a
+static error file expects exit 65. Error annotations name the message only,
+without the `[line N]` prefix, and each error file holds a single error, since
+evaluation stops at the first one.
+
+```
+literals/      one file per value type
+arithmetic/    precedence, grouping, left associativity, division
+strings/       + joining two strings
+not/           not on every kind of value, which tests the truthiness rule
+logical/       and, or, and short-circuiting
+comparison/    each comparison, including where < and <= differ
+equality/      equal and unequal values, mixed types, and void
+precedence/    one expression that uses every level
+errors/        one runtime or static error per file
+```
+
 Run locally with:
 
 ```bash
@@ -409,6 +532,7 @@ curl -sSL https://raw.githubusercontent.com/WhiteLicorice/cmsc-124-harness/v1.1/
 ./build.sh
 python3 run_tests.py tests/lab1
 python3 run_tests.py tests/lab2
+python3 run_tests.py tests/lab3
 ```
 
 ## Sample code
@@ -463,7 +587,7 @@ Nier's stated purpose is testing combat protocols safely, and safe testing means
 Long numbers are hard to read at a glance, since 1000000 and 10000000 look almost the same. Java, Kotlin, Python, and Rust all added separators for this reason so we did the same. We require every separator to have a digit on both sides, so 1_000_, 1__000, and 1_.5 are all errors. A separator that divides nothing is almost certainly a typo, and accepting it silently would hide the mistake. Checking both sides rather than just the end also keeps the scanner honest against its own documentation, since a rule written as "between digits" should be the rule the code enforces. We left leading underscores alone since _1000 already scans as an identifier, and overriding that would mean special casing a rule we already have.
 
 - One expression per line
-Nier already ends statements with a newline instead of a semicolon, so we made `--parse` follow the same rule. We split on the line numbers the scanner already records instead of on the raw text, so every diagnostic keeps its real line number. Not letting an expression continue past the end of a line means a missing operand is caught on the line where it happened, instead of silently pulling in the next line.
+Nier already ends statements with a newline instead of a semicolon, so we made `--parse` follow the same rule. The parser reads the whole file's tokens and uses the line numbers the scanner already records to tell where each expression ends, so every diagnostic keeps its real line number. Not letting an expression continue past the end of a line means a missing operand is caught on the line where it happened, instead of silently pulling in the next line.
 
 - `not` at the unary level
 `not` and unary `-` are both prefix operators that take one operand, so they share one rule. This keeps the grammar to a single unary level. The cost is that `not` binds tighter than arithmetic, which we note under known limitations.
@@ -502,4 +626,8 @@ Nier already ends statements with a newline instead of a semicolon, so we made `
 | Activity | What changed in the language |
 |---|---|
 | Lab 1 | Nier defined: 15 keywords, brace-delimited blocks, newline statement termination, `#` line comments, double-quoted strings with escapes and no line spanning, integer and decimal numbers with no leading or trailing dot, letter-or-underscore identifiers. Logical negation is the `not` keyword. A bare `!` is a lexical error. Token output format frozen. Added `scan` for name-and-value state inspection, distinct from `report`'s value-only output. Added underscore digit separators in numeric literals, valid only between two digits. |
+<<<<<<< Updated upstream
+| Lab 2 | Expression grammar added, loosest to tightest: `or`, `and`, `== !=`, `< <= > >=`, `+ -`, `* /`, then prefix `not` and `-`, then literals and parenthesized groups. Every binary operator is left-associative. `--parse` prints one prefix-form tree per line. One expression per line, and an expression cannot span lines. A file with no expressions is rejected. The parser reads the whole file and recovers at the next line after an error, so every bad line is reported. The REPL prints each line's parsed tree. Assignment and identifiers are not parsed yet. |
+=======
 | Lab 2 | Expression grammar added, loosest to tightest: `or`, `and`, `== !=`, `< <= > >=`, `+ -`, `* /`, then prefix `not` and `-`, then literals and parenthesized groups. Every binary operator is left-associative. `--parse` prints one prefix-form tree per line. One expression per line, and an expression cannot span lines. A file with no expressions is rejected. Each line is parsed on its own, so every bad line is reported. The REPL prints each line's parsed tree. Assignment and identifiers are not parsed yet. |
+>>>>>>> Stashed changes
