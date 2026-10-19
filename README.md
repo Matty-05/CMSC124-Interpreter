@@ -238,7 +238,6 @@ prefix form, wrapped in parentheses.
 
 ### Values and types
 
-<<<<<<< Updated upstream
 Nier is dynamically typed. A value's type is only known when the program runs,
 so the evaluator stores every value in Kotlin's `Any?`, the type every Kotlin
 value fits into, and checks what it holds when an operator needs to know.
@@ -266,17 +265,6 @@ the evaluator in this form without conversion.
 This is the `--eval` and REPL output. `--parse` keeps its own format from Lab 2,
 where numbers always show a decimal point (`4.0`) and booleans print as `true`
 and `false`.
-=======
-The evaluator represents numbers as Kotlin `Double`, strings as `String`,
-booleans as `Boolean`, and `void` as `null`.
-
-### Value printing
-
-- Numbers: omit a trailing `.0`, so `5.0` prints as `5`.
-- Nil: `void`.
-- Strings: without quotes, with escape sequences already decoded.
-- Booleans: `true` and `false`.
->>>>>>> Stashed changes
 
 ### Truthiness
 
@@ -287,7 +275,6 @@ in later labs.
 
 ### Operator semantics
 
-<<<<<<< Updated upstream
 - Arithmetic: `-`, `*`, and `/` take two numbers, and unary `-` takes one.
   Anything else is a runtime error.
 - `+` on strings: two numbers add and two strings join (`"a" + "b"` is `ab`).
@@ -317,21 +304,6 @@ with code 70. The messages are:
 | Unary `-` on a non-number | `Operand must be a number.` |
 | `+` on anything but two numbers or two strings | `Operands must be two numbers or two strings.` |
 | Dividing by zero | `Division by zero.` |
-=======
-- Arithmetic: unary `-` and binary `+`, `-`, `*`, `/` accept numbers only.
-- `+` on strings: runtime error; no concatenation or coercion.
-- Mixed types: runtime error at the operator token.
-- Comparison: [accepted operand types]
-- Equality across types: [false, or an error]
-- Division by zero: runtime error (including division by negative zero).
-
-The arithmetic core evaluates literals and grouping as well. Other parsed
-operators currently report an unsupported-operator runtime error.
-`--eval` follows the same one-expression-per-line splitting rule as `--parse`.
-It parses every line before evaluation; scanner or parser errors exit 65
-without value output. Evaluation prints each result in order and stops on the
-first runtime error, reporting its operator and line on stderr and exiting 70.
->>>>>>> Stashed changes
 
 ### Scope and bindings
 
@@ -416,15 +388,9 @@ comes back, since a bad line must not end the session.
 | Invalid command-line arguments | 64 |
 | Runtime error (`--eval`) | 70 |
 
-<<<<<<< Updated upstream
 A file that scans and parses but then fails while evaluating exits 70. Output
 printed before the failing line stays on stdout, since evaluation runs top to
 bottom and stops at the first runtime error.
-=======
-`--eval` exits 70 for invalid arithmetic operand types, division by zero,
-or operators not yet supported by the evaluator. Diagnostics include the
-operator token's line number.
->>>>>>> Stashed changes
 
 ## Testing conventions
 
@@ -498,20 +464,21 @@ empty/         a file with only a comment, which is rejected
 Every rejected lab2 file has an empty `.expected`, since `--parse` prints
 nothing for a rejected file, and a `.exit` holding 65.
 
-Lab 3 tests use inline mode: each file holds one case, with its expected
-result written in a `#` comment on the same line. The answers are worked out by
-hand before running.
+Lab 3 tests use sidecar mode, like Labs 1 and 2. Each `.mata` file has a matching
+`.expected` file, and rejected inputs also have an `.exit` file containing 65
+for a static error or 70 for a runtime error.
 
 ```
-1 + 2 * 3  # expect: 7
-"a" - 1  # expect runtime error: Operands must be numbers.
-(1 + 2  # expect error: Expect ')' after expression.
+arithmetic/add.mata
+arithmetic/add.expected
+errors/type-error.mata
+errors/type-error.expected
+errors/type-error.exit
 ```
 
-Each of those lines is its own file. A runtime error file expects exit 70 and a
-static error file expects exit 65. Error annotations name the message only,
-without the `[line N]` prefix, and each error file holds a single error, since
-evaluation stops at the first one.
+Successful tests omit `.exit` because zero is the default. Error diagnostics are
+written to stderr; their `.expected` files remain empty because sidecar output
+describes stdout.
 
 ```
 literals/      one file per value type
@@ -626,8 +593,4 @@ Nier already ends statements with a newline instead of a semicolon, so we made `
 | Activity | What changed in the language |
 |---|---|
 | Lab 1 | Nier defined: 15 keywords, brace-delimited blocks, newline statement termination, `#` line comments, double-quoted strings with escapes and no line spanning, integer and decimal numbers with no leading or trailing dot, letter-or-underscore identifiers. Logical negation is the `not` keyword. A bare `!` is a lexical error. Token output format frozen. Added `scan` for name-and-value state inspection, distinct from `report`'s value-only output. Added underscore digit separators in numeric literals, valid only between two digits. |
-<<<<<<< Updated upstream
 | Lab 2 | Expression grammar added, loosest to tightest: `or`, `and`, `== !=`, `< <= > >=`, `+ -`, `* /`, then prefix `not` and `-`, then literals and parenthesized groups. Every binary operator is left-associative. `--parse` prints one prefix-form tree per line. One expression per line, and an expression cannot span lines. A file with no expressions is rejected. The parser reads the whole file and recovers at the next line after an error, so every bad line is reported. The REPL prints each line's parsed tree. Assignment and identifiers are not parsed yet. |
-=======
-| Lab 2 | Expression grammar added, loosest to tightest: `or`, `and`, `== !=`, `< <= > >=`, `+ -`, `* /`, then prefix `not` and `-`, then literals and parenthesized groups. Every binary operator is left-associative. `--parse` prints one prefix-form tree per line. One expression per line, and an expression cannot span lines. A file with no expressions is rejected. Each line is parsed on its own, so every bad line is reported. The REPL prints each line's parsed tree. Assignment and identifiers are not parsed yet. |
->>>>>>> Stashed changes
