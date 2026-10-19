@@ -1,0 +1,1 @@
+void == inactive  # expect: inactive

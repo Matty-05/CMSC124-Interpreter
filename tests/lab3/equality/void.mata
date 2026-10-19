@@ -1,0 +1,1 @@
+void == void  # expect: active
