@@ -1,0 +1,1 @@
+"ab" == "ab"  # expect: active

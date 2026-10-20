@@ -370,10 +370,11 @@ invalid escape, where the string is still emitted without the bad escape.
 happens. Otherwise the parser reads the whole file, and the parsed trees are
 printed only if no line failed, so a rejected file prints nothing to stdout.
 
-The REPL works one line at a time and prints each line's parsed tree. A line
-with a lexical error prints only that error, without trying to parse it, and a
-line with a syntax error prints only the parser's error. Either way the prompt
-comes back, since a bad line must not end the session.
+The REPL works one line at a time and prints each line's value. A line with a
+lexical error prints only that error, without trying to parse it, a line with a
+syntax error prints only the parser's error, and a line that fails while
+evaluating prints its runtime error. Either way the prompt comes back, since a
+bad line must not end the session.
 
 | Failure | Exit code |
 |---|---|
@@ -464,21 +465,23 @@ empty/         a file with only a comment, which is rejected
 Every rejected lab2 file has an empty `.expected`, since `--parse` prints
 nothing for a rejected file, and a `.exit` holding 65.
 
-Lab 3 tests use sidecar mode, like Labs 1 and 2. Each `.mata` file has a matching
-`.expected` file, and rejected inputs also have an `.exit` file containing 65
-for a static error or 70 for a runtime error.
+Lab 3 tests use inline mode, as the Lab 3 spec asks: each file holds one case,
+with its expected result written in a `#` comment on the same line, so no
+sidecar files are needed. The answers are worked out by hand before running,
+since the values are now computed and can be checked against arithmetic.
 
 ```
-arithmetic/add.mata
-arithmetic/add.expected
-errors/type-error.mata
-errors/type-error.expected
-errors/type-error.exit
+3 + 4 * 2  # expect: 11
+"a" - 1  # expect runtime error: Operands must be numbers.
+(1 + 2  # expect error: Expect ')' after expression.
 ```
 
-Successful tests omit `.exit` because zero is the default. Error diagnostics are
-written to stderr; their `.expected` files remain empty because sidecar output
-describes stdout.
+Each of those lines is its own file. `expect:` checks stdout. `expect runtime
+error:` checks the message on stderr and exit 70, and `expect error:` does the
+same for a static error with exit 65. Error annotations name the message only,
+without the `[line N]` prefix, and each error file holds a single error, since
+evaluation stops at the first one. One file, `errors/output-before-error`, also
+checks that a value printed before the failing line stays on stdout.
 
 ```
 literals/      one file per value type
@@ -489,7 +492,8 @@ logical/       and, or, and short-circuiting
 comparison/    each comparison, including where < and <= differ
 equality/      equal and unequal values, mixed types, and void
 precedence/    one expression that uses every level
-errors/        one runtime or static error per file
+errors/        one runtime or static error per file, including dividing by
+               negative zero
 ```
 
 Run locally with:
@@ -587,6 +591,13 @@ Nier already ends statements with a newline instead of a semicolon, so we made `
   and a syntax error reports only the lexical one.
 - The error for an empty or comment-only file always says line 1, even when the
   comment is further down.
+- Numbers are binary floating point, so `0.1 + 0.2` evaluates to
+  `0.30000000000000004` rather than `0.3`.
+- Negative zero exists and prints as `-0`, since `-0` is a different `Double`
+  from `0`. It still counts as zero for division, so `1 / -0` is a division by
+  zero error.
+- `--eval` prints numbers without a trailing `.0` but keeps scientific notation,
+  so `10_000_000 * 1` prints `1.0E7`.
 
 ## Changelog
 
@@ -594,3 +605,4 @@ Nier already ends statements with a newline instead of a semicolon, so we made `
 |---|---|
 | Lab 1 | Nier defined: 15 keywords, brace-delimited blocks, newline statement termination, `#` line comments, double-quoted strings with escapes and no line spanning, integer and decimal numbers with no leading or trailing dot, letter-or-underscore identifiers. Logical negation is the `not` keyword. A bare `!` is a lexical error. Token output format frozen. Added `scan` for name-and-value state inspection, distinct from `report`'s value-only output. Added underscore digit separators in numeric literals, valid only between two digits. |
 | Lab 2 | Expression grammar added, loosest to tightest: `or`, `and`, `== !=`, `< <= > >=`, `+ -`, `* /`, then prefix `not` and `-`, then literals and parenthesized groups. Every binary operator is left-associative. `--parse` prints one prefix-form tree per line. One expression per line, and an expression cannot span lines. A file with no expressions is rejected. The parser reads the whole file and recovers at the next line after an error, so every bad line is reported. The REPL prints each line's parsed tree. Assignment and identifiers are not parsed yet. |
+| Lab 3 | Expressions now evaluate with `--eval`, and the REPL prints values. Values are numbers, strings, `active`/`inactive`, and `void`. `inactive` and `void` are false and everything else is true. `+` adds two numbers or joins two strings; arithmetic and comparison need numbers; equality works on any two values, and different types are never equal. `and` and `or` short-circuit. Division by zero is a runtime error. Runtime errors exit 70. Numbers print without a trailing `.0` and booleans print as `active` and `inactive`. |
