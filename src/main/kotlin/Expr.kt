@@ -1,4 +1,8 @@
 sealed class Expr {
+
+    // program → expression* EOF
+    class Program(val expressions: List<Expr>) : Expr()
+
     // primary → NUMBER | STRING | "active" | "inactive" | "void"
     class Literal(val value: Any?) : Expr()
 
