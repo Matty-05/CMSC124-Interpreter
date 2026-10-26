@@ -1,4 +1,5 @@
 import java.io.File
+import java.nio.charset.MalformedInputException
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
@@ -38,6 +39,9 @@ fun runParseFile(path: String) {
     } catch (e: Parser.ParseError) {
         System.err.println(e.message)
         exitProcess(65)
+    } catch (_: StackOverflowError) {
+        System.err.println("[line 1] Error: Expression nested too deeply.")
+        exitProcess(65)
     }
     exitProcess(0)
 }
@@ -53,7 +57,12 @@ fun runProgram(path: String) {
 fun runPrompt() {
     while (true) {
         print("> ")
-        val line = readlnOrNull() ?: break
+        val line = try {
+            readlnOrNull()
+        } catch (_: MalformedInputException) {
+            System.err.println("Error: Invalid UTF-8 input.")
+            continue
+        } ?: break
         if (line.isBlank()) continue
         if (line.trim().lowercase() in listOf("exit", "quit")) break
 
@@ -65,6 +74,8 @@ fun runPrompt() {
             System.err.println(e.message)
         } catch (e: Parser.ParseError) {
             System.err.println(e.message)
+        } catch (_: StackOverflowError) {
+            System.err.println("[line 1] Error: Expression nested too deeply.")
         }
     }
 }
