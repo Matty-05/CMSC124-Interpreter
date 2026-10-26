@@ -26,7 +26,7 @@ Nier is a programming language designed for YoRHa androids and other operators w
 | `./run --eval <file>` | Evaluates each expression, one per line, and prints its value. |
 | `./run` | Starts the REPL. |
 
-Exit codes: 0 when the file scans (and, with `--parse`, parses) cleanly, 65 when the scanner or parser rejects it, 70 when a successfully parsed program fails during evaluation, 64 for bad arguments or a file that can't be read.
+Exit codes: 0 when the file scans (and, with `--parse`, parses) cleanly, 65 when the scanner or parser rejects it, 70 when a successfully parsed program fails during evaluation, 64 for bad arguments or, with `--tokenize`, `--parse`, or `--eval`, a file that can't be read.
 
 ## File extension
 
@@ -387,7 +387,7 @@ bad line must not end the session.
 | Syntax error on any line (`--parse`) | 65 |
 | File with no expressions (`--parse`) | 65 |
 | Invalid command-line arguments | 64 |
-| Source file missing or unreadable | 64 |
+| Source file missing or unreadable (`--tokenize`, `--parse`, `--eval`) | 64 |
 | Runtime error (`--eval`) | 70 |
 
 A file that scans and parses but then fails while evaluating exits 70. Output
