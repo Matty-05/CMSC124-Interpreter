@@ -40,9 +40,6 @@ fun runParseFile(path: String) {
     } catch (e: Parser.ParseError) {
         System.err.println(e.message)
         exitProcess(65)
-    } catch (_: StackOverflowError) {
-        System.err.println("[line 1] Error: Expression nested too deeply.")
-        exitProcess(65)
     }
     exitProcess(0)
 }
@@ -56,9 +53,6 @@ fun runEvalFile(path: String) {
     } catch (e: Parser.ParseError) {
         System.err.println(e.message)
         exitProcess(65)
-    } catch (_: StackOverflowError) {
-        System.err.println("[line 1] Error: Expression nested too deeply.")
-        exitProcess(65)
     }
 
     try {
@@ -67,8 +61,8 @@ fun runEvalFile(path: String) {
         System.err.println("[line ${e.token.line}] Runtime error: ${e.message}")
         exitProcess(70)
     } catch (_: StackOverflowError) {
-        System.err.println("[line 1] Error: Expression nested too deeply.")
-        exitProcess(65)
+        System.err.println("Runtime error: Expression nested too deeply.")
+        exitProcess(70)
     }
 }
 
@@ -103,8 +97,6 @@ fun runPrompt() {
             System.err.println(e.message)
         } catch (e: RuntimeError) {
             System.err.println("[line ${e.token.line}] Runtime error: ${e.message}")
-        } catch (_: StackOverflowError) {
-            System.err.println("[line 1] Error: Expression nested too deeply.")
         }
     }
 }

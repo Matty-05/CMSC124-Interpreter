@@ -154,6 +154,9 @@ class Parser(private val tokens: List<Token>) {
                 val expr = expression()
                 if (!atLineEnd()) throw error(peek(), "Expect end of expression.")
                 expressions += expr
+            } catch (_: StackOverflowError) {
+                errors += "[line $exprLine] Error: Expression nested too deeply."
+                synchronize()
             } catch (e: ParseError) {
                 errors += e.message.orEmpty()
                 synchronize()
