@@ -145,7 +145,7 @@ class Parser(private val tokens: List<Token>) {
 
 
     // program → expression* EOF, one expression per line
-    fun parse(): Expr {
+    fun parse(): Expr.Program {
         val expressions = mutableListOf<Expr>()
         val errors = mutableListOf<String>()
         while (!isAtEnd()) {

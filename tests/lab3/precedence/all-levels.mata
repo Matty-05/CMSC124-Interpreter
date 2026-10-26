@@ -1,0 +1,1 @@
+not inactive and 1 + 2 * 3 >= 7 == active  # expect: active
