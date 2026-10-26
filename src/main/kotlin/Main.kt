@@ -33,7 +33,15 @@ fun runParseFile(path: String) {
     val source = File(path).readText()
     try {
         val program = Parser(Scanner(source).scanTokens()).parse()
-        println(AstPrinter.print(program))
+        val trees = program.expressions.map { expr ->
+            try {
+                AstPrinter.print(expr)
+            } catch (_: StackOverflowError) {
+                System.err.println("[line ${expressionLine(expr)}] Error: Expression nested too deeply.")
+                exitProcess(65)
+            }
+        }
+        trees.forEach(::println)
     } catch (e: Scanner.ScanError) {
         System.err.println(e.message)
         exitProcess(65)
@@ -55,14 +63,16 @@ fun runEvalFile(path: String) {
         exitProcess(65)
     }
 
-    try {
-        for (expr in program.expressions) println(Evaluator.stringify(Evaluator.evaluate(expr)))
-    } catch (e: RuntimeError) {
-        System.err.println("[line ${e.token.line}] Runtime error: ${e.message}")
-        exitProcess(70)
-    } catch (_: StackOverflowError) {
-        System.err.println("Runtime error: Expression nested too deeply.")
-        exitProcess(70)
+    for (expr in program.expressions) {
+        try {
+            println(Evaluator.stringify(Evaluator.evaluate(expr)))
+        } catch (e: RuntimeError) {
+            System.err.println("[line ${e.token.line}] Runtime error: ${e.message}")
+            exitProcess(70)
+        } catch (_: StackOverflowError) {
+            System.err.println("[line ${expressionLine(expr)}] Runtime error: Expression nested too deeply.")
+            exitProcess(70)
+        }
     }
 }
 
@@ -97,9 +107,24 @@ fun runPrompt() {
             System.err.println(e.message)
         } catch (e: RuntimeError) {
             System.err.println("[line ${e.token.line}] Runtime error: ${e.message}")
+        } catch (_: StackOverflowError) {
+            System.err.println("[line 1] Runtime error: Expression nested too deeply.")
         }
     }
 }
 
 
 fun scan(source: String): List<Token> = Scanner(source).scanTokens()
+
+private fun expressionLine(expr: Expr): Int {
+    var current = expr
+    while (true) {
+        when (current) {
+            is Expr.Binary -> return current.operator.line
+            is Expr.Unary -> return current.operator.line
+            is Expr.Grouping -> current = current.expression
+            is Expr.Program -> current = current.expressions.firstOrNull() ?: return 1
+            is Expr.Literal -> return 1
+        }
+    }
+}
