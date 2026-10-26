@@ -1,0 +1,1 @@
+"hello" - 2  # expect runtime error: Operands must be numbers.

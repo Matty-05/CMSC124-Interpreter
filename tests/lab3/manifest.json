@@ -1,0 +1,6 @@
+{
+  "ext": ".mata",
+  "flag": "--eval",
+  "mode": "inline",
+  "comment_prefix": "#"
+}

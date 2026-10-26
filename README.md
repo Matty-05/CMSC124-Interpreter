@@ -23,7 +23,7 @@ Nier is a programming language designed for YoRHa androids and other operators w
 | `./run <file>` | Executes a program. Available from Lab 4; until then it prints the team banner that `tests/lab0` checks. |
 | `./run --tokenize <file>` | Prints the token stream. |
 | `./run --parse <file>` | Parses one expression per line and prints each tree. |
-| `./run --eval <file>` | Evaluates each expression and prints its value. Available from Lab 3. |
+| `./run --eval <file>` | Evaluates each expression, one per line, and prints its value. |
 | `./run` | Starts the REPL. |
 
 Exit codes: 0 when the file scans (and, with `--parse`, parses) cleanly, 65 when the scanner or parser rejects it, 70 when a successfully parsed program fails during evaluation.
@@ -129,7 +129,9 @@ identifier instead, since underscore is a valid identifier start character, so
 - Nesting: not applicable
 - A comment may appear at the end of a line of code, as in `unit x = 4  # note`
 - Comments are discarded by the scanner and never emitted as tokens
-- Harness note: `comment_prefix` in `tests/lab*/manifest.json` is set to `#`.
+- Harness note: `tests/lab3/manifest.json` sets `comment_prefix` to `#`, since
+  its inline `# expect:` annotations live in comments. The lab1 and lab2 folders
+  use sidecar files, so they don't need it.
 
 Block comments were cut to keep the scanner's comment handling to a single
 case. Nested block comments in particular require tracking a depth counter and
@@ -236,28 +238,72 @@ prefix form, wrapped in parentheses.
 
 ### Values and types
 
-[What runtime values exist, and how they are represented in the host
-language.]
+Nier is dynamically typed. A value's type is only known when the program runs,
+so the evaluator stores every value in Kotlin's `Any?`, the type every Kotlin
+value fits into, and checks what it holds when an operator needs to know.
+
+| Nier value | Example | Stored as |
+|---|---|---|
+| Number | `42`, `3.5` | `Double`. Integers and decimals are one type. |
+| String | `"hi"` | `String` |
+| Boolean | `active`, `inactive` | `Boolean` (`true`, `false`) |
+| Nothing | `void` | `null` |
+
+The scanner already builds number literals as `Double` and the parser stores
+`active`, `inactive`, and `void` as `true`, `false`, and `null`, so values reach
+the evaluator in this form without conversion.
 
 ### Value printing
 
-- Numbers: [e.g. 5 rather than 5.0]
-- Nil: [spelling]
-- Strings: [with or without quotes]
+- Numbers: without a trailing `.0`, so `2 + 3` prints `5` and `5 / 2` prints
+  `2.5`. Very large or very small numbers keep Kotlin's scientific notation,
+  such as `1.0E7`.
+- Booleans: `active` and `inactive`, the way they are written in Nier.
+- Nil: `void`.
+- Strings: without quotes, so `"hi" + " there"` prints `hi there`.
+
+This is the `--eval` and REPL output. `--parse` keeps its own format from Lab 2,
+where numbers always show a decimal point (`4.0`) and booleans print as `true`
+and `false`.
 
 ### Truthiness
 
-[The complete rule. Which values are false in a condition; everything else is
-true.]
+`inactive` and `void` are false. Every other value is true, including `0` and
+the empty string `""`. One function, `isTruthy`, applies this rule everywhere a
+value is used as a condition: `not`, `and`, and `or` now, and `if` and `while`
+in later labs.
 
 ### Operator semantics
 
-- Arithmetic: [accepted operand types]
-- `+` on strings: [concatenation, error, or coercion]
-- Mixed types: [what happens]
-- Comparison: [accepted operand types]
-- Equality across types: [false, or an error]
-- Division by zero: [value produced, or runtime error]
+- Arithmetic: `-`, `*`, and `/` take two numbers, and unary `-` takes one.
+  Anything else is a runtime error.
+- `+` on strings: two numbers add and two strings join (`"a" + "b"` is `ab`).
+  Any other pair, such as `"a" + 1`, is a runtime error rather than a silent
+  conversion, since a mixed `+` is far more likely a mistake than intent.
+- Mixed types: never converted. An operator that needs numbers rejects anything
+  else with a runtime error.
+- Comparison: `<`, `<=`, `>`, and `>=` take two numbers and produce `active` or
+  `inactive`.
+- Equality across types: `==` and `!=` accept any two values. Values of
+  different types are never equal, so `1 == "1"` is `inactive` and not an
+  error. `void == void` is `active`.
+- Logical: `not` works on any value by its truthiness. `and` and `or` produce
+  `active` or `inactive` and short-circuit: `and` skips its right side when the
+  left is false, and `or` skips it when the left is true.
+- Division by zero: a runtime error. Nier is for testing protocols safely, so a
+  division that has no real answer stops the program instead of quietly
+  producing `Infinity`.
+- Evaluation order: the left operand is always evaluated before the right.
+
+Runtime errors print on stderr as `[line N] Runtime error: <message>` and exit
+with code 70. The messages are:
+
+| Cause | Message |
+|---|---|
+| `-`, `*`, `/`, or a comparison on a non-number | `Operands must be numbers.` |
+| Unary `-` on a non-number | `Operand must be a number.` |
+| `+` on anything but two numbers or two strings | `Operands must be two numbers or two strings.` |
+| Dividing by zero | `Division by zero.` |
 
 ### Scope and bindings
 
@@ -324,10 +370,11 @@ invalid escape, where the string is still emitted without the bad escape.
 happens. Otherwise the parser reads the whole file, and the parsed trees are
 printed only if no line failed, so a rejected file prints nothing to stdout.
 
-The REPL works one line at a time and prints each line's parsed tree. A line
-with a lexical error prints only that error, without trying to parse it, and a
-line with a syntax error prints only the parser's error. Either way the prompt
-comes back, since a bad line must not end the session.
+The REPL works one line at a time and prints each line's value. A line with a
+lexical error prints only that error, without trying to parse it, a line with a
+syntax error prints only the parser's error, and a line that fails while
+evaluating prints its runtime error. Either way the prompt comes back, since a
+bad line must not end the session.
 
 | Failure | Exit code |
 |---|---|
@@ -340,8 +387,11 @@ comes back, since a bad line must not end the session.
 | Syntax error on any line (`--parse`) | 65 |
 | File with no expressions (`--parse`) | 65 |
 | Invalid command-line arguments | 64 |
+| Runtime error (`--eval`) | 70 |
 
-Exit 70 is reserved for runtime errors and is unused until Lab 3.
+A file that scans and parses but then fails while evaluating exits 70. Output
+printed before the failing line stays on stdout, since evaluation runs top to
+bottom and stops at the first runtime error.
 
 ## Testing conventions
 
@@ -415,6 +465,37 @@ empty/         a file with only a comment, which is rejected
 Every rejected lab2 file has an empty `.expected`, since `--parse` prints
 nothing for a rejected file, and a `.exit` holding 65.
 
+Lab 3 tests use inline mode, as the Lab 3 spec asks: each file holds one case,
+with its expected result written in a `#` comment on the same line, so no
+sidecar files are needed. The answers are worked out by hand before running,
+since the values are now computed and can be checked against arithmetic.
+
+```
+3 + 4 * 2  # expect: 11
+"a" - 1  # expect runtime error: Operands must be numbers.
+(1 + 2  # expect error: Expect ')' after expression.
+```
+
+Each of those lines is its own file. `expect:` checks stdout. `expect runtime
+error:` checks the message on stderr and exit 70, and `expect error:` does the
+same for a static error with exit 65. Error annotations name the message only,
+without the `[line N]` prefix, and each error file holds a single error, since
+evaluation stops at the first one. One file, `errors/output-before-error`, also
+checks that a value printed before the failing line stays on stdout.
+
+```
+literals/      one file per value type
+arithmetic/    precedence, grouping, left associativity, division
+strings/       + joining two strings
+not/           not on every kind of value, which tests the truthiness rule
+logical/       and, or, and short-circuiting
+comparison/    each comparison, including where < and <= differ
+equality/      equal and unequal values, mixed types, and void
+precedence/    one expression that uses every level
+errors/        one runtime or static error per file, including dividing by
+               negative zero
+```
+
 Run locally with:
 
 ```bash
@@ -422,6 +503,7 @@ curl -sSL https://raw.githubusercontent.com/WhiteLicorice/cmsc-124-harness/v1.1/
 ./build.sh
 python3 run_tests.py tests/lab1
 python3 run_tests.py tests/lab2
+python3 run_tests.py tests/lab3
 ```
 
 ## Sample code
@@ -509,6 +591,13 @@ Nier already ends statements with a newline instead of a semicolon, so we made `
   and a syntax error reports only the lexical one.
 - The error for an empty or comment-only file always says line 1, even when the
   comment is further down.
+- Numbers are binary floating point, so `0.1 + 0.2` evaluates to
+  `0.30000000000000004` rather than `0.3`.
+- Negative zero exists and prints as `-0`, since `-0` is a different `Double`
+  from `0`. It still counts as zero for division, so `1 / -0` is a division by
+  zero error.
+- `--eval` prints numbers without a trailing `.0` but keeps scientific notation,
+  so `10_000_000 * 1` prints `1.0E7`.
 
 ## Changelog
 
@@ -516,3 +605,4 @@ Nier already ends statements with a newline instead of a semicolon, so we made `
 |---|---|
 | Lab 1 | Nier defined: 15 keywords, brace-delimited blocks, newline statement termination, `#` line comments, double-quoted strings with escapes and no line spanning, integer and decimal numbers with no leading or trailing dot, letter-or-underscore identifiers. Logical negation is the `not` keyword. A bare `!` is a lexical error. Token output format frozen. Added `scan` for name-and-value state inspection, distinct from `report`'s value-only output. Added underscore digit separators in numeric literals, valid only between two digits. |
 | Lab 2 | Expression grammar added, loosest to tightest: `or`, `and`, `== !=`, `< <= > >=`, `+ -`, `* /`, then prefix `not` and `-`, then literals and parenthesized groups. Every binary operator is left-associative. `--parse` prints one prefix-form tree per line. One expression per line, and an expression cannot span lines. A file with no expressions is rejected. The parser reads the whole file and recovers at the next line after an error, so every bad line is reported. The REPL prints each line's parsed tree. Assignment and identifiers are not parsed yet. |
+| Lab 3 | Expressions now evaluate with `--eval`, and the REPL prints values. Values are numbers, strings, `active`/`inactive`, and `void`. `inactive` and `void` are false and everything else is true. `+` adds two numbers or joins two strings; arithmetic and comparison need numbers; equality works on any two values, and different types are never equal. `and` and `or` short-circuit. Division by zero is a runtime error. Runtime errors exit 70. Numbers print without a trailing `.0` and booleans print as `active` and `inactive`. |
