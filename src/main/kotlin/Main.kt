@@ -1,5 +1,6 @@
 import java.io.File
 import java.nio.charset.MalformedInputException
+import java.io.IOException
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) {
@@ -16,8 +17,16 @@ fun main(args: Array<String>) {
     }
 }
 
+// A path that can't be read is a bad argument, so it exits 64 like a usage error.
+fun readSource(path: String): String = try {
+    File(path).readText()
+} catch (e: IOException) {
+    System.err.println("Error: Could not read file '$path'.")
+    exitProcess(64)
+}
+
 fun runFile(path: String) {
-    val source = File(path).readText()
+    val source = readSource(path)
     try {
         scan(source).forEach(::println)
     } catch (e: Scanner.ScanError) {
@@ -30,7 +39,7 @@ fun runFile(path: String) {
 }
 
 fun runParseFile(path: String) {
-    val source = File(path).readText()
+    val source = readSource(path)
     try {
         val program = Parser(Scanner(source).scanTokens()).parse()
         val trees = program.expressions.map { expr ->
@@ -54,7 +63,7 @@ fun runParseFile(path: String) {
 
 fun runEvalFile(path: String) {
     val program = try {
-        Parser(Scanner(File(path).readText()).scanTokens()).parse()
+        Parser(Scanner(readSource(path)).scanTokens()).parse()
     } catch (e: Scanner.ScanError) {
         System.err.println(e.message)
         exitProcess(65)
