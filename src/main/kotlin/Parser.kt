@@ -143,8 +143,9 @@ class Parser(private val tokens: List<Token>) {
     // expression → or
     private fun expression(): Expr = or()
 
+
     // program → expression* EOF, one expression per line
-    fun parse(): List<Expr> {
+    fun parse(): Expr.Program {
         val expressions = mutableListOf<Expr>()
         val errors = mutableListOf<String>()
         while (!isAtEnd()) {
@@ -160,7 +161,7 @@ class Parser(private val tokens: List<Token>) {
         }
         if (errors.isNotEmpty()) throw ParseError(errors.joinToString("\n"))
         if (expressions.isEmpty()) throw ParseError("[line 1] Error: Expect expression.")
-        return expressions
+        return Expr.Program(expressions)
     }
 
     // After an error, skip the rest of the line; the next line starts fresh.

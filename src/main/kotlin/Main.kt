@@ -31,8 +31,8 @@ fun runFile(path: String) {
 fun runParseFile(path: String) {
     val source = File(path).readText()
     try {
-        val expressions = Parser(Scanner(source).scanTokens()).parse()
-        expressions.forEach { println(AstPrinter.print(it)) }
+        val program = Parser(Scanner(source).scanTokens()).parse()
+        println(AstPrinter.print(program))
     } catch (e: Scanner.ScanError) {
         System.err.println(e.message)
         exitProcess(65)
@@ -44,7 +44,7 @@ fun runParseFile(path: String) {
 }
 
 fun runEvalFile(path: String) {
-    val expressions = try {
+    val program = try {
         Parser(Scanner(File(path).readText()).scanTokens()).parse()
     } catch (e: Scanner.ScanError) {
         System.err.println(e.message)
@@ -55,7 +55,7 @@ fun runEvalFile(path: String) {
     }
 
     try {
-        for (expr in expressions) println(Evaluator.stringify(Evaluator.evaluate(expr)))
+        for (expr in program.expressions) println(Evaluator.stringify(Evaluator.evaluate(expr)))
     } catch (e: RuntimeError) {
         System.err.println("[line ${e.token.line}] Runtime error: ${e.message}")
         exitProcess(70)
@@ -79,7 +79,7 @@ fun runPrompt() {
 
         try {
             val tokens = Scanner(line).scanTokens()
-            Parser(tokens).parse().forEach {
+            Parser(tokens).parse().expressions.forEach {
                 println(Evaluator.stringify(Evaluator.evaluate(it)))
             }
         } catch (e: Scanner.ScanError) {
