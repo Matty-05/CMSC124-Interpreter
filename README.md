@@ -20,11 +20,11 @@ Nier is a programming language designed for YoRHa androids and other operators w
 
 | Command | What it does |
 |---|---|
-| `./run <file>` | Executes a program. Available from Lab 4; until then it prints the team banner that `tests/lab0` checks. |
+| `./run <file>` | Runs a program: executes its statements in order. Only `report` statements print. |
 | `./run --tokenize <file>` | Prints the token stream. |
-| `./run --parse <file>` | Parses one expression per line and prints each tree. |
-| `./run --eval <file>` | Evaluates each expression, one per line, and prints its value. |
-| `./run` | Starts the REPL. |
+| `./run --parse <file>` | Parses one statement per line and prints each tree. |
+| `./run --eval <file>` | Evaluates each line and prints its value, as in Lab 3. |
+| `./run` | Starts the REPL, which runs statements and prints the value of a bare expression. |
 
 Exit codes: 0 when the file scans (and, with `--parse`, parses) cleanly, 65 when the scanner or parser rejects it, 70 when a successfully parsed program fails during evaluation, 64 for bad arguments or, with `--tokenize`, `--parse`, or `--eval`, a file that can't be read.
 
@@ -170,7 +170,11 @@ committed `.expected` file is compared against this format byte for byte.
 ## Grammar
 
 ```
-program    → expression* EOF ;     (one expression per line)
+program    → statement* EOF ;      (one statement per line)
+statement  → reportStmt
+           | exprStmt ;
+reportStmt → "report" expression ;
+exprStmt   → expression ;
 expression → or ;
 or         → and ( "or" and )* ;
 and        → equality ( "and" equality )* ;
@@ -185,9 +189,30 @@ primary    → NUMBER | STRING | "active" | "inactive" | "void"
 ```
 
 `program` is the parser's entry point, `parse()`. It parses the whole file and
-returns the list of expressions in it. Each expression must end where its line
-ends: since the scanner does not emit a token for newlines, a token on a later
-line marks the end of the expression, the way a `;` would in other languages.
+returns a single program node holding the file's statements in order. Each
+statement must end where its line ends: since the scanner does not emit a token
+for newlines, a token on a later line marks the end of the statement, the way a
+`;` would in other languages.
+
+A statement is either a `report` statement or an expression statement.
+`report <expression>` evaluates the expression and prints its value. An
+expression statement is an expression on its own line: it is evaluated, and in
+a file its value is thrown away. Statements may only appear at the start of a
+line, so `report` cannot be used inside an expression (`1 + report 2` is a
+syntax error).
+
+Every mode reads a file with this same grammar and differs only in what it
+prints:
+
+| Mode | Prints |
+|---|---|
+| `./run <file>` | only what `report` statements print |
+| `./run --eval <file>` | the value of each expression statement, and whatever `report` prints |
+| `./run --parse <file>` | the tree of each statement |
+| REPL | what `report` prints, and the value of a bare expression |
+
+A Lab 2 or Lab 3 file holds only expressions, so `--parse` and `--eval` print
+exactly what they did before.
 
 Each rule matches one function in `Parser.kt` with the same name. A rule only
 calls the rule for the next tighter level, which is what makes the grammar
@@ -201,16 +226,17 @@ the operand directly after it, so `not 1 + 2` is `(not 1) + 2`.
 
 ### Splitting rule
 
-A file holds one expression per line. The whole file is scanned, and the parser
-reads all of its tokens, ending each expression where its line ends.
+A file holds one statement per line. The whole file is scanned, and the parser
+reads all of its tokens, ending each statement where its line ends.
 
 - Blank lines and comment-only lines hold no tokens, so they are skipped.
 - An expression cannot continue onto the next line, even inside parentheses.
   `(1 +` on one line and `2)` on the next is two broken lines, not one
   expression.
-- Two expressions on one line (`1 2`) is an error: the parser expects the line
-  to end after the first one.
-- A file with no expressions at all, including one with only comments, is
+- Two expressions on one line (`1 2`), or a `report` after an expression on
+  the same line, is an error: the parser expects the line to end after the
+  first statement.
+- A file with no statements at all, including one with only comments, is
   rejected.
 - After a syntax error the parser skips the rest of that line and starts again
   on the next one (`synchronize()`), so each bad line gets its own diagnostic.
@@ -221,8 +247,12 @@ reads all of its tokens, ending each expression where its line ends.
 (+ 1.0 (* 2.0 3.0))
 ```
 
-One line of output per expression, in file order. Every operator node prints in
+One line of output per statement, in file order. Every operator node prints in
 prefix form, wrapped in parentheses.
+
+- Expression statements print as: the expression's tree, as in Lab 2
+- `report` statements print as: `(report expression)`, e.g.
+  `report 1 + 2` prints `(report (+ 1.0 2.0))`
 
 - Binary operators print as: `(op left right)`, e.g. `(- (- 1.0 2.0) 3.0)`
 - Unary operators print as: `(op operand)`, e.g. `(not true)`, `(- 1.0)`
@@ -262,9 +292,17 @@ the evaluator in this form without conversion.
 - Nil: `void`.
 - Strings: without quotes, so `"hi" + " there"` prints `hi there`.
 
-This is the `--eval` and REPL output. `--parse` keeps its own format from Lab 2,
-where numbers always show a decimal point (`4.0`) and booleans print as `true`
-and `false`.
+This is the format of `report`, `--eval`, and the REPL. `--parse` keeps its own
+format from Lab 2, where numbers always show a decimal point (`4.0`) and
+booleans print as `true` and `false`.
+
+### Output
+
+A program's only output is what its `report` statements print, one value per
+line, in the order they run. A bare expression on its own line is evaluated but
+prints nothing when a file is run, so a program shows only what it chooses to
+report. `--eval` and the REPL still print each bare expression's value, since
+showing values is their purpose. Diagnostics always go to stderr.
 
 ### Truthiness
 
@@ -607,3 +645,4 @@ Nier already ends statements with a newline instead of a semicolon, so we made `
 | Lab 1 | Nier defined: 15 keywords, brace-delimited blocks, newline statement termination, `#` line comments, double-quoted strings with escapes and no line spanning, integer and decimal numbers with no leading or trailing dot, letter-or-underscore identifiers. Logical negation is the `not` keyword. A bare `!` is a lexical error. Token output format frozen. Added `scan` for name-and-value state inspection, distinct from `report`'s value-only output. Added underscore digit separators in numeric literals, valid only between two digits. |
 | Lab 2 | Expression grammar added, loosest to tightest: `or`, `and`, `== !=`, `< <= > >=`, `+ -`, `* /`, then prefix `not` and `-`, then literals and parenthesized groups. Every binary operator is left-associative. `--parse` prints one prefix-form tree per line. One expression per line, and an expression cannot span lines. A file with no expressions is rejected. The parser reads the whole file and recovers at the next line after an error, so every bad line is reported. The REPL prints each line's parsed tree. Assignment and identifiers are not parsed yet. |
 | Lab 3 | Expressions now evaluate with `--eval`, and the REPL prints values. Values are numbers, strings, `active`/`inactive`, and `void`. `inactive` and `void` are false and everything else is true. `+` adds two numbers or joins two strings; arithmetic and comparison need numbers; equality works on any two values, and different types are never equal. `and` and `or` short-circuit. Division by zero is a runtime error. Runtime errors exit 70. Numbers print without a trailing `.0` and booleans print as `active` and `inactive`. |
+| Lab 4 | Programs run with plain `./run <file>`. A file is a list of statements, one per line: `report <expression>` prints a value, and an expression on its own line is evaluated without printing. `--parse` prints `report` statements as `(report ...)`, and `--eval` and the REPL still print bare expression values. |
