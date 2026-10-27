@@ -1,4 +1,9 @@
 object AstPrinter {
+    fun print(stmt: Stmt): String = when (stmt) {
+        is Stmt.Expression -> print(stmt.expression)
+        is Stmt.Report -> "(report ${print(stmt.expression)})"
+    }
+
     // Walks any Expr node and returns its prefix-parenthesized string form,
     // e.g. (+ 1.0 2.0). One branch per node type defined in Expr.kt.
     fun print(expr: Expr): String {
