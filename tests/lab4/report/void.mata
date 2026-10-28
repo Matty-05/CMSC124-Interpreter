@@ -1,0 +1,1 @@
+report void  # expect: void
