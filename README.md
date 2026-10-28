@@ -385,7 +385,9 @@ ran out:
 [line 1] Error: Expect statement.
 ```
 
-The last form is for a file with no statements at all.
+`Expect end of statement.` means something was left on the line after a
+complete statement, as in `1 2` or `1 report 2`. The last form is for a file
+with no statements at all.
 
 Error handling uses exceptions instead of a shared global error flag.
 The scanner collects diagnostics on its own instance and throws `Scanner.ScanError`
@@ -535,14 +537,39 @@ errors/        one runtime or static error per file, including dividing by
                negative zero
 ```
 
+Lab 4 tests are inline too, but run with plain `./run` and no flag, since
+running a program is what they test. They check what a program prints, which
+is only what its `report` statements print. A file that should print nothing
+says so with `# expect nothing`, so a silent file is never mistaken for an
+unannotated one.
+
+```
+report 1 + 2  # expect: 3
+1 + 2  # expect nothing
+```
+
+```
+report/                one file per kind of value, and several reports in
+                       order
+expression-statement/  a bare expression prints nothing, alone and before a
+                       report
+errors/                a runtime error, output printed before an error, and
+                       a report with no expression
+```
+
+`tests/lab0/hello.mata` is now a real Nier program: four `report` lines that
+print the team banner its `.expected` file holds.
+
 Run locally with:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/WhiteLicorice/cmsc-124-harness/v1.1/run_tests.py -o run_tests.py
 ./build.sh
+python3 run_tests.py tests/lab0
 python3 run_tests.py tests/lab1
 python3 run_tests.py tests/lab2
 python3 run_tests.py tests/lab3
+python3 run_tests.py tests/lab4
 ```
 
 ## Sample code
