@@ -143,17 +143,25 @@ class Parser(private val tokens: List<Token>) {
     // expression → or
     private fun expression(): Expr = or()
 
+    // statement → reportStmt | exprStmt
+    private fun statement(): Stmt {
+        if (match(TokenType.REPORT)) return reportStmt()
+        return Stmt.Expression(expression())
+    }
 
-    // program → expression* EOF, one expression per line
-    fun parse(): Expr.Program {
-        val expressions = mutableListOf<Expr>()
+    // reportStmt → "report" expression
+    private fun reportStmt(): Stmt = Stmt.Report(expression())
+
+    // program → statement* EOF, one statement per line
+    fun parse(): Program {
+        val statements = mutableListOf<Stmt>()
         val errors = mutableListOf<String>()
         while (!isAtEnd()) {
             exprLine = peek().line
             try {
-                val expr = expression()
-                if (!atLineEnd()) throw error(peek(), "Expect end of expression.")
-                expressions += expr
+                val stmt = statement()
+                if (!atLineEnd()) throw error(peek(), "Expect end of statement.")
+                statements += stmt
             } catch (_: StackOverflowError) {
                 errors += "[line $exprLine] Error: Expression nested too deeply."
                 synchronize()
@@ -163,8 +171,8 @@ class Parser(private val tokens: List<Token>) {
             }
         }
         if (errors.isNotEmpty()) throw ParseError(errors.joinToString("\n"))
-        if (expressions.isEmpty()) throw ParseError("[line 1] Error: Expect expression.")
-        return Expr.Program(expressions)
+        if (statements.isEmpty()) throw ParseError("[line 1] Error: Expect statement.")
+        return Program(statements)
     }
 
     // After an error, skip the rest of the line; the next line starts fresh.

@@ -380,12 +380,12 @@ ran out:
 
 ```
 [line 1] Error at end: Expect expression.
-[line 1] Error at '2': Expect end of expression.
+[line 1] Error at '2': Expect end of statement.
 [line 1] Error at end: Expect ')' after expression.
-[line 1] Error: Expect expression.
+[line 1] Error: Expect statement.
 ```
 
-The last form is for a file with no expressions at all.
+The last form is for a file with no statements at all.
 
 Error handling uses exceptions instead of a shared global error flag.
 The scanner collects diagnostics on its own instance and throws `Scanner.ScanError`
