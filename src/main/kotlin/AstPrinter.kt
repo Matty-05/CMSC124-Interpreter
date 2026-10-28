@@ -12,7 +12,6 @@ object AstPrinter {
             is Expr.Binary -> parenthesize(expr.operator.lexeme, expr.left, expr.right)
             is Expr.Unary -> parenthesize(expr.operator.lexeme, expr.right)
             is Expr.Grouping -> parenthesize("group", expr.expression)
-            is Expr.Program -> expr.expressions.joinToString("\n") { print(it) }
         }
     }
 

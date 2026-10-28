@@ -41,8 +41,8 @@ fun runFile(path: String) {
 fun runParseFile(path: String) {
     val source = readSource(path)
     try {
-        val statements = Parser(Scanner(source).scanTokens()).parse()
-        val trees = statements.map { stmt ->
+        val program = Parser(Scanner(source).scanTokens()).parse()
+        val trees = program.statements.map { stmt ->
             try {
                 AstPrinter.print(stmt)
             } catch (_: StackOverflowError) {
@@ -62,7 +62,7 @@ fun runParseFile(path: String) {
 }
 
 fun runEvalFile(path: String) {
-    val statements = try {
+    val program = try {
         Parser(Scanner(readSource(path)).scanTokens()).parse()
     } catch (e: Scanner.ScanError) {
         System.err.println(e.message)
@@ -72,7 +72,7 @@ fun runEvalFile(path: String) {
         exitProcess(65)
     }
 
-    for (stmt in statements) {
+    for (stmt in program.statements) {
         try {
             when (stmt) {
                 is Stmt.Expression -> println(Evaluator.stringify(Evaluator.evaluate(stmt.expression)))
@@ -89,7 +89,7 @@ fun runEvalFile(path: String) {
 }
 
 fun runProgram(path: String) {
-    val statements = try {
+    val program = try {
         Parser(Scanner(readSource(path)).scanTokens()).parse()
     } catch (e: Scanner.ScanError) {
         System.err.println(e.message)
@@ -99,7 +99,7 @@ fun runProgram(path: String) {
         exitProcess(65)
     }
 
-    for (stmt in statements) {
+    for (stmt in program.statements) {
         try {
             Evaluator.execute(stmt)
         } catch (e: RuntimeError) {
@@ -126,7 +126,7 @@ fun runPrompt() {
 
         try {
             val tokens = Scanner(line).scanTokens()
-            Parser(tokens).parse().forEach { stmt ->
+            Parser(tokens).parse().statements.forEach { stmt ->
                 when (stmt) {
                     is Stmt.Expression -> println(Evaluator.stringify(Evaluator.evaluate(stmt.expression)))
                     is Stmt.Report -> Evaluator.execute(stmt)
@@ -159,7 +159,6 @@ private fun expressionLine(expr: Expr): Int {
             is Expr.Binary -> return current.operator.line
             is Expr.Unary -> return current.operator.line
             is Expr.Grouping -> current = current.expression
-            is Expr.Program -> current = current.expressions.firstOrNull() ?: return 1
             is Expr.Literal -> return 1
         }
     }

@@ -153,7 +153,7 @@ class Parser(private val tokens: List<Token>) {
     private fun reportStmt(): Stmt = Stmt.Report(expression())
 
     // program → statement* EOF, one statement per line
-    fun parse(): List<Stmt> {
+    fun parse(): Program {
         val statements = mutableListOf<Stmt>()
         val errors = mutableListOf<String>()
         while (!isAtEnd()) {
@@ -172,7 +172,7 @@ class Parser(private val tokens: List<Token>) {
         }
         if (errors.isNotEmpty()) throw ParseError(errors.joinToString("\n"))
         if (statements.isEmpty()) throw ParseError("[line 1] Error: Expect statement.")
-        return statements
+        return Program(statements)
     }
 
     // After an error, skip the rest of the line; the next line starts fresh.
