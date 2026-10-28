@@ -1,7 +1,12 @@
 object Evaluator {
+    fun execute(stmt: Stmt) {
+        when (stmt) {
+            is Stmt.Expression -> evaluate(stmt.expression)
+            is Stmt.Report -> println(stringify(evaluate(stmt.expression)))
+        }
+    }
+
     fun evaluate(expr: Expr): Any? = when (expr) {
-        // Main prints each expression's value; evaluating a whole program yields the last one.
-        is Expr.Program -> expr.expressions.map(::evaluate).last()
         is Expr.Literal -> expr.value
         is Expr.Grouping -> evaluate(expr.expression)
         is Expr.Unary -> {

@@ -42,11 +42,11 @@ fun runParseFile(path: String) {
     val source = readSource(path)
     try {
         val program = Parser(Scanner(source).scanTokens()).parse()
-        val trees = program.expressions.map { expr ->
+        val trees = program.statements.map { stmt ->
             try {
-                AstPrinter.print(expr)
+                AstPrinter.print(stmt)
             } catch (_: StackOverflowError) {
-                System.err.println("[line ${expressionLine(expr)}] Error: Expression nested too deeply.")
+                System.err.println("[line ${statementLine(stmt)}] Error: Expression nested too deeply.")
                 exitProcess(65)
             }
         }
@@ -72,25 +72,44 @@ fun runEvalFile(path: String) {
         exitProcess(65)
     }
 
-    for (expr in program.expressions) {
+    for (stmt in program.statements) {
         try {
-            println(Evaluator.stringify(Evaluator.evaluate(expr)))
+            when (stmt) {
+                is Stmt.Expression -> println(Evaluator.stringify(Evaluator.evaluate(stmt.expression)))
+                is Stmt.Report -> Evaluator.execute(stmt)
+            }
         } catch (e: RuntimeError) {
             System.err.println("[line ${e.token.line}] Runtime error: ${e.message}")
             exitProcess(70)
         } catch (_: StackOverflowError) {
-            System.err.println("[line ${expressionLine(expr)}] Runtime error: Expression nested too deeply.")
+            System.err.println("[line ${statementLine(stmt)}] Runtime error: Expression nested too deeply.")
             exitProcess(70)
         }
     }
 }
 
 fun runProgram(path: String) {
-    println("Hello from Team Peanut Butterbonia!")
-    println("Members:")
-    println("Ralph Ryan T. Escabarte")
-    println("John Matthew N. Fallarme")
-    exitProcess(0)
+    val program = try {
+        Parser(Scanner(readSource(path)).scanTokens()).parse()
+    } catch (e: Scanner.ScanError) {
+        System.err.println(e.message)
+        exitProcess(65)
+    } catch (e: Parser.ParseError) {
+        System.err.println(e.message)
+        exitProcess(65)
+    }
+
+    for (stmt in program.statements) {
+        try {
+            Evaluator.execute(stmt)
+        } catch (e: RuntimeError) {
+            System.err.println("[line ${e.token.line}] Runtime error: ${e.message}")
+            exitProcess(70)
+        } catch (_: StackOverflowError) {
+            System.err.println("[line ${statementLine(stmt)}] Runtime error: Expression nested too deeply.")
+            exitProcess(70)
+        }
+    }
 }
 
 fun runPrompt() {
@@ -107,8 +126,11 @@ fun runPrompt() {
 
         try {
             val tokens = Scanner(line).scanTokens()
-            Parser(tokens).parse().expressions.forEach {
-                println(Evaluator.stringify(Evaluator.evaluate(it)))
+            Parser(tokens).parse().statements.forEach { stmt ->
+                when (stmt) {
+                    is Stmt.Expression -> println(Evaluator.stringify(Evaluator.evaluate(stmt.expression)))
+                    is Stmt.Report -> Evaluator.execute(stmt)
+                }
             }
         } catch (e: Scanner.ScanError) {
             System.err.println(e.message)
@@ -122,6 +144,11 @@ fun runPrompt() {
     }
 }
 
+private fun statementLine(stmt: Stmt): Int = when (stmt) {
+    is Stmt.Expression -> expressionLine(stmt.expression)
+    is Stmt.Report -> expressionLine(stmt.expression)
+}
+
 
 fun scan(source: String): List<Token> = Scanner(source).scanTokens()
 
@@ -132,7 +159,6 @@ private fun expressionLine(expr: Expr): Int {
             is Expr.Binary -> return current.operator.line
             is Expr.Unary -> return current.operator.line
             is Expr.Grouping -> current = current.expression
-            is Expr.Program -> current = current.expressions.firstOrNull() ?: return 1
             is Expr.Literal -> return 1
         }
     }
