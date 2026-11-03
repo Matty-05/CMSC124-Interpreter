@@ -79,9 +79,9 @@ kept deliberately small. Keywords are reserved in all contexts.
 
 Category and operand count are settled as of Lab 1. Precedence runs from 1
 (loosest) to 7 (tightest) and is encoded in the grammar below: each level's rule
-calls the next tighter one. Assignment is not parsed yet, since it belongs to
-statements, which arrive in Lab 4. Unary operators are listed as
-right-associative because they nest to the right: `- -1` is `-(-1)`.
+calls the next tighter one. Assignment is not parsed yet; it is the next part of
+Lab 4. Unary operators are listed as right-associative because they nest to the
+right: `- -1` is `-(-1)`.
 
 `-` appears twice, as binary subtraction and as unary negation. The scanner
 emits the same `MINUS` token for both. Distinguishing them is the parser's
@@ -170,29 +170,37 @@ committed `.expected` file is compared against this format byte for byte.
 ## Grammar
 
 ```
-program    → statement* EOF ;      (one statement per line)
-statement  → reportStmt
-           | exprStmt ;
-reportStmt → "report" expression ;
-exprStmt   → expression ;
-expression → or ;
-or         → and ( "or" and )* ;
-and        → equality ( "and" equality )* ;
-equality   → comparison ( ( "!=" | "==" ) comparison )* ;
-comparison → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
-term       → factor ( ( "+" | "-" ) factor )* ;
-factor     → unary ( ( "*" | "/" ) unary )* ;
-unary      → ( "not" | "-" ) unary
-           | primary ;
-primary    → NUMBER | STRING | "active" | "inactive" | "void"
-           | "(" expression ")" ;
+program     → declaration* EOF ;   (one declaration per line)
+declaration → unitDecl
+            | statement ;
+unitDecl    → "unit" IDENTIFIER ( "=" expression )? ;
+statement   → reportStmt
+            | exprStmt ;
+reportStmt  → "report" expression ;
+exprStmt    → expression ;
+expression  → or ;
+or          → and ( "or" and )* ;
+and         → equality ( "and" equality )* ;
+equality    → comparison ( ( "!=" | "==" ) comparison )* ;
+comparison  → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
+term        → factor ( ( "+" | "-" ) factor )* ;
+factor      → unary ( ( "*" | "/" ) unary )* ;
+unary       → ( "not" | "-" ) unary
+            | primary ;
+primary     → NUMBER | STRING | "active" | "inactive" | "void"
+            | IDENTIFIER | "(" expression ")" ;
 ```
 
 `program` is the parser's entry point, `parse()`. It parses the whole file and
-returns a single program node holding the file's statements in order. Each
+returns a single program node holding the file's declarations in order. Each
 statement must end where its line ends: since the scanner does not emit a token
 for newlines, a token on a later line marks the end of the statement, the way a
 `;` would in other languages.
+
+A declaration is either a `unit` declaration or a statement. `unit name =
+<expression>` creates a binding named `name` holding the expression's value;
+`unit name` alone holds `void`. A name on its own inside an expression reads
+the value bound to it.
 
 A statement is either a `report` statement or an expression statement.
 `report <expression>` evaluates the expression and prints its value. An
@@ -253,6 +261,9 @@ prefix form, wrapped in parentheses.
 - Expression statements print as: the expression's tree, as in Lab 2
 - `report` statements print as: `(report expression)`, e.g.
   `report 1 + 2` prints `(report (+ 1.0 2.0))`
+- `unit` declarations print as: `(unit name value)`, or `(unit name)` with no
+  value, e.g. `unit hp = 100` prints `(unit hp 100.0)`
+- Names print as: the name itself, e.g. `hp`
 
 - Binary operators print as: `(op left right)`, e.g. `(- (- 1.0 2.0) 3.0)`
 - Unary operators print as: `(op operand)`, e.g. `(not true)`, `(- 1.0)`
@@ -345,10 +356,22 @@ with code 70. The messages are:
 
 ### Scope and bindings
 
-- Redeclaration in the same scope: [allowed or an error]
-- Uninitialized variable holds: [value]
+- Creating a binding: `unit name = <expression>`. Only `unit` creates a name.
+- Redeclaration in the same scope: allowed. `unit x = 1` then `unit x = 2`
+  rebinds `x` to `2`, so retyping a declaration in the REPL is not an error.
+- Uninitialized variable holds: `void`, so `unit x` then `report x` prints
+  `void`.
+- Mutability: every binding can be changed later.
+- Binding time and lookup: a name is looked up when its line runs, not when the
+  file is parsed. Using a name before its `unit` line has run is the
+  undefined-name error below.
+- Storage lifetime: there is one global set of bindings for the whole run. A
+  file's bindings last until the program ends, and the REPL keeps them between
+  lines, so `unit x = 1` on one line and `report x` on the next prints `1`.
 - Shadowing: [behavior]
-- Undefined name: [static error with exit 65, or runtime error with exit 70]
+- Undefined name: runtime error with exit 70, `[line N] Runtime error:
+  Undefined variable 'x'.` With one global set of bindings, which names exist
+  is only known while the program runs.
 
 ### Control flow and functions
 
@@ -553,8 +576,12 @@ report/                one file per kind of value, and several reports in
                        order
 expression-statement/  a bare expression prints nothing, alone and before a
                        report
-errors/                a runtime error, output printed before an error, and
-                       a report with no expression
+unit/                  declaring with and without a value, redeclaring,
+                       using names in expressions, and a declaration printing
+                       nothing
+errors/                a runtime error, output printed before an error, a
+                       report with no expression, an undefined name, a name
+                       used before its unit line, and a unit with no name
 ```
 
 `tests/lab0/hello.mata` is now a real Nier program: four `report` lines that
@@ -642,9 +669,8 @@ Nier already ends statements with a newline instead of a semicolon, so we made `
   uses Kotlin's `isLetter()`, which accepts any Unicode letter. `café` is
   currently a valid identifier. The scanner is more permissive than this
   document says.
-- Assignment (`=`) and identifiers are scanned but not parsed yet; they arrive
-  with statements in Lab 4. A line that uses one is rejected, e.g. `x + 1`
-  reports `Error at 'x': Expect expression.`
+- Assignment (`=`) outside a `unit` declaration is not parsed yet. A line
+  like `x = 1` is rejected with `Error at '=': Expect end of statement.`
 - An expression cannot span lines, even inside parentheses.
 - `not` binds tighter than every binary operator, so `not 1 + 2` parses as
   `(+ (not 1.0) 2.0)` and `not 1 == 2` as `(== (not 1.0) 2.0)`.
@@ -672,4 +698,4 @@ Nier already ends statements with a newline instead of a semicolon, so we made `
 | Lab 1 | Nier defined: 15 keywords, brace-delimited blocks, newline statement termination, `#` line comments, double-quoted strings with escapes and no line spanning, integer and decimal numbers with no leading or trailing dot, letter-or-underscore identifiers. Logical negation is the `not` keyword. A bare `!` is a lexical error. Token output format frozen. Added `scan` for name-and-value state inspection, distinct from `report`'s value-only output. Added underscore digit separators in numeric literals, valid only between two digits. |
 | Lab 2 | Expression grammar added, loosest to tightest: `or`, `and`, `== !=`, `< <= > >=`, `+ -`, `* /`, then prefix `not` and `-`, then literals and parenthesized groups. Every binary operator is left-associative. `--parse` prints one prefix-form tree per line. One expression per line, and an expression cannot span lines. A file with no expressions is rejected. The parser reads the whole file and recovers at the next line after an error, so every bad line is reported. The REPL prints each line's parsed tree. Assignment and identifiers are not parsed yet. |
 | Lab 3 | Expressions now evaluate with `--eval`, and the REPL prints values. Values are numbers, strings, `active`/`inactive`, and `void`. `inactive` and `void` are false and everything else is true. `+` adds two numbers or joins two strings; arithmetic and comparison need numbers; equality works on any two values, and different types are never equal. `and` and `or` short-circuit. Division by zero is a runtime error. Runtime errors exit 70. Numbers print without a trailing `.0` and booleans print as `active` and `inactive`. |
-| Lab 4 | Programs run with plain `./run <file>`. A file is a list of statements, one per line: `report <expression>` prints a value, and an expression on its own line is evaluated without printing. `--parse` prints `report` statements as `(report ...)`, and `--eval` and the REPL still print bare expression values. |
+| Lab 4 | Programs run with plain `./run <file>`. A file is a list of statements, one per line: `report <expression>` prints a value, and an expression on its own line is evaluated without printing. `--parse` prints `report` statements as `(report ...)`, and `--eval` and the REPL still print bare expression values. `unit name = value` creates a binding and `unit name` holds `void`; names are read inside expressions. Redeclaring a name rebinds it. An undefined name is a runtime error (exit 70). Bindings are global and the REPL keeps them between lines. |
