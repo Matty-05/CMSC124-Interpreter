@@ -1,1 +1,1 @@
-(1 + 2) = 3  
+(1 + 2) = 3  # expect error: Invalid assignment target.

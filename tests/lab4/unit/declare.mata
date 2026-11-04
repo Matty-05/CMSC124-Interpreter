@@ -1,2 +1,2 @@
 unit hp = 100
-report hp  
+report hp  # expect: 100

@@ -1,1 +1,1 @@
-unit hp = 100  
+unit hp = 100  # expect nothing

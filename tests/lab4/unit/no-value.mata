@@ -1,2 +1,2 @@
 unit target
-report target  
+report target  # expect: void

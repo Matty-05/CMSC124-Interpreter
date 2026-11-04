@@ -1,1 +1,1 @@
-missing = 1 
+missing = 1  # expect runtime error: Undefined variable 'missing'.
