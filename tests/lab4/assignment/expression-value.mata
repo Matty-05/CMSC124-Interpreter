@@ -1,2 +1,2 @@
-unit hp = 100
-report hp = 80  # expect: 80
+unit hp = 79
+report hp = hp + 1  # expect: 80
