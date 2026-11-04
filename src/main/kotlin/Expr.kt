@@ -13,4 +13,7 @@ sealed class Expr {
 
     // primary → IDENTIFIER
     class Variable(val name: Token) : Expr()
+
+    // assignment → IDENTIFIER "=" assignment
+    class Assign(val name: Token, val value: Expr) : Expr()
 }

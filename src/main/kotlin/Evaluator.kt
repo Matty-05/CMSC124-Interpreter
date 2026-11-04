@@ -15,6 +15,11 @@ object Evaluator {
         is Expr.Literal -> expr.value
         is Expr.Grouping -> evaluate(expr.expression)
         is Expr.Variable -> environment.get(expr.name)
+        is Expr.Assign -> {
+            val value = evaluate(expr.value)
+            environment.assign(expr.name, value)
+            value
+        }
         is Expr.Unary -> {
             val right = evaluate(expr.right)
             when (expr.operator.type) {

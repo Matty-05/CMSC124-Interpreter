@@ -161,6 +161,7 @@ private fun expressionLine(expr: Expr): Int {
             is Expr.Unary -> return current.operator.line
             is Expr.Grouping -> current = current.expression
             is Expr.Variable -> return current.name.line
+            is Expr.Assign -> return current.name.line
             is Expr.Literal -> return 1
         }
     }

@@ -11,4 +11,11 @@ class Environment {
         if (name.lexeme in values) return values[name.lexeme]
         throw RuntimeError(name, "Undefined variable '${name.lexeme}'.")
     }
+
+    fun assign(name: Token, value: Any?) {
+        if (name.lexeme !in values) {
+            throw RuntimeError(name, "Undefined variable '${name.lexeme}'.")
+        }
+        values[name.lexeme] = value
+    }
 }
