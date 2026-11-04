@@ -4,7 +4,10 @@ sealed class Stmt {
 
     // reportStmt -> "report" expression
     class Report(val expression: Expr) : Stmt()
+
+    // unitDecl -> "unit" IDENTIFIER ( "=" expression )?
+    class Unit(val name: Token, val initializer: Expr?) : Stmt()
 }
 
-// program -> statement* EOF
+// program -> declaration* EOF
 class Program(val statements: List<Stmt>)

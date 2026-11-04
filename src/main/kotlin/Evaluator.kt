@@ -1,14 +1,20 @@
 object Evaluator {
+    // Global bindings; kept between REPL lines.
+    private val environment = Environment()
+
     fun execute(stmt: Stmt) {
         when (stmt) {
             is Stmt.Expression -> evaluate(stmt.expression)
             is Stmt.Report -> println(stringify(evaluate(stmt.expression)))
+            // A unit with no value holds void.
+            is Stmt.Unit -> environment.define(stmt.name.lexeme, stmt.initializer?.let { evaluate(it) })
         }
     }
 
     fun evaluate(expr: Expr): Any? = when (expr) {
         is Expr.Literal -> expr.value
         is Expr.Grouping -> evaluate(expr.expression)
+        is Expr.Variable -> environment.get(expr.name)
         is Expr.Unary -> {
             val right = evaluate(expr.right)
             when (expr.operator.type) {
