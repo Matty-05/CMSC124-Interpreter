@@ -76,7 +76,7 @@ fun runEvalFile(path: String) {
         try {
             when (stmt) {
                 is Stmt.Expression -> println(Evaluator.stringify(Evaluator.evaluate(stmt.expression)))
-                is Stmt.Report -> Evaluator.execute(stmt)
+                else -> Evaluator.execute(stmt)
             }
         } catch (e: RuntimeError) {
             System.err.println("[line ${e.token.line}] Runtime error: ${e.message}")
@@ -129,7 +129,7 @@ fun runPrompt() {
             Parser(tokens).parse().statements.forEach { stmt ->
                 when (stmt) {
                     is Stmt.Expression -> println(Evaluator.stringify(Evaluator.evaluate(stmt.expression)))
-                    is Stmt.Report -> Evaluator.execute(stmt)
+                    else -> Evaluator.execute(stmt)
                 }
             }
         } catch (e: Scanner.ScanError) {
@@ -147,6 +147,7 @@ fun runPrompt() {
 private fun statementLine(stmt: Stmt): Int = when (stmt) {
     is Stmt.Expression -> expressionLine(stmt.expression)
     is Stmt.Report -> expressionLine(stmt.expression)
+    is Stmt.Unit -> stmt.name.line
 }
 
 
@@ -159,6 +160,8 @@ private fun expressionLine(expr: Expr): Int {
             is Expr.Binary -> return current.operator.line
             is Expr.Unary -> return current.operator.line
             is Expr.Grouping -> current = current.expression
+            is Expr.Variable -> return current.name.line
+            is Expr.Assign -> return current.name.line
             is Expr.Literal -> return 1
         }
     }

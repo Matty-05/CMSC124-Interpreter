@@ -46,7 +46,7 @@ class Parser(private val tokens: List<Token>) {
 
     class ParseError(message: String) : RuntimeException(message)
 
-    // primary → NUMBER | STRING | "active" | "inactive" | "void" | "(" expression ")"
+    // primary → NUMBER | STRING | "active" | "inactive" | "void" | IDENTIFIER | "(" expression ")"
     private fun primary(): Expr {
         if (match(TokenType.NUMBER, TokenType.STRING)) {
             return Expr.Literal(previous().literal)
@@ -54,6 +54,7 @@ class Parser(private val tokens: List<Token>) {
         if (match(TokenType.ACTIVE)) return Expr.Literal(true)
         if (match(TokenType.INACTIVE)) return Expr.Literal(false)
         if (match(TokenType.VOID)) return Expr.Literal(null)
+        if (match(TokenType.IDENTIFIER)) return Expr.Variable(previous())
 
         if (match(TokenType.LEFT_PAREN)) {
             val expr = expression()
@@ -140,8 +141,36 @@ class Parser(private val tokens: List<Token>) {
         return expr
     }
 
-    // expression → or
-    private fun expression(): Expr = or()
+    // assignment → IDENTIFIER "=" assignment | or
+    private fun assignment(): Expr {
+        val expr = or()
+
+        if (match(TokenType.EQUAL)) {
+            val equals = previous()
+            val value = assignment()
+
+            if (expr is Expr.Variable) return Expr.Assign(expr.name, value)
+            throw error(equals, "Invalid assignment target.")
+        }
+
+        return expr
+    }
+
+    // expression → assignment
+    private fun expression(): Expr = assignment()
+
+    // declaration → unitDecl | statement
+    private fun declaration(): Stmt {
+        if (match(TokenType.UNIT)) return unitDecl()
+        return statement()
+    }
+
+    // unitDecl → "unit" IDENTIFIER ( "=" expression )?
+    private fun unitDecl(): Stmt {
+        val name = consume(TokenType.IDENTIFIER, "Expect unit name.")
+        val initializer = if (match(TokenType.EQUAL)) expression() else null
+        return Stmt.Unit(name, initializer)
+    }
 
     // statement → reportStmt | exprStmt
     private fun statement(): Stmt {
@@ -152,14 +181,14 @@ class Parser(private val tokens: List<Token>) {
     // reportStmt → "report" expression
     private fun reportStmt(): Stmt = Stmt.Report(expression())
 
-    // program → statement* EOF, one statement per line
+    // program → declaration* EOF, one declaration per line
     fun parse(): Program {
         val statements = mutableListOf<Stmt>()
         val errors = mutableListOf<String>()
         while (!isAtEnd()) {
             exprLine = peek().line
             try {
-                val stmt = statement()
+                val stmt = declaration()
                 if (!atLineEnd()) throw error(peek(), "Expect end of statement.")
                 statements += stmt
             } catch (_: StackOverflowError) {

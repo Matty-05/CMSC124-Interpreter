@@ -10,4 +10,10 @@ sealed class Expr {
 
     // primary → "(" expression ")"
     class Grouping(val expression: Expr) : Expr()
+
+    // primary → IDENTIFIER
+    class Variable(val name: Token) : Expr()
+
+    // assignment → IDENTIFIER "=" assignment
+    class Assign(val name: Token, val value: Expr) : Expr()
 }
