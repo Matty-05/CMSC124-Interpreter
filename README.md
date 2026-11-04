@@ -361,14 +361,15 @@ with code 70. The messages are:
   rebinds `x` to `2`, so retyping a declaration in the REPL is not an error.
 - Uninitialized variable holds: `void`, so `unit x` then `report x` prints
   `void`.
-- Mutability: every binding can be changed later.
+- Mutability: assignment changes an existing binding, as in `x = 2` after
+  `unit x = 1`. Assigning to an undefined name is a runtime error.
 - Binding time and lookup: a name is looked up when its line runs, not when the
   file is parsed. Using a name before its `unit` line has run is the
   undefined-name error below.
 - Storage lifetime: there is one global set of bindings for the whole run. A
   file's bindings last until the program ends, and the REPL keeps them between
   lines, so `unit x = 1` on one line and `report x` on the next prints `1`.
-- Shadowing: [behavior]
+- Shadowing: not applicable yet because local scopes are not implemented.
 - Undefined name: runtime error with exit 70, `[line N] Runtime error:
   Undefined variable 'x'.` With one global set of bindings, which names exist
   is only known while the program runs.
