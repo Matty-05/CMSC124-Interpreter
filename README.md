@@ -367,16 +367,25 @@ with code 70. The messages are:
   `void`.
 - Mutability: assignment changes an existing binding, as in `x = 2` after
   `unit x = 1`. Assigning to an undefined name is a runtime error.
+- Paradigm: imperative. A program is a list of statements run top to bottom,
+  and units hold values that can change.
+- Scope: lexical (static). A block `{ ... }` opens a new scope inside the one
+  around it. Lookup starts in the innermost scope and walks outward, so which
+  `x` a line means depends on where the line sits in the source.
 - Binding time and lookup: a name is looked up when its line runs, not when the
   file is parsed. Using a name before its `unit` line has run is the
   undefined-name error below.
-- Storage lifetime: there is one global set of bindings for the whole run. A
-  file's bindings last until the program ends, and the REPL keeps them between
-  lines, so `unit x = 1` on one line and `report x` on the next prints `1`.
-- Shadowing: not applicable yet because local scopes are not implemented.
+- Shadowing: allowed. `unit x` inside a block creates a new `x` in that block
+  and hides the outer one; the outer `x` is unchanged and visible again once
+  the block ends. Assignment (`x = 2`) never creates a binding: it changes the
+  nearest existing `x`, which may be in an outer scope.
+- Storage lifetime: a block's units live until the block ends, then they are
+  gone. Global units last until the program ends, and the REPL keeps them
+  between lines, so `unit x = 1` on one line and `report x` on the next prints
+  `1`.
 - Undefined name: runtime error with exit 70, `[line N] Runtime error:
-  Undefined variable 'x'.` With one global set of bindings, which names exist
-  is only known while the program runs.
+  Undefined variable 'x'.` Lookup happens while the program runs, so which
+  names exist is only known then.
 
 ### Control flow and functions
 
