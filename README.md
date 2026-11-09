@@ -219,9 +219,9 @@ start on the next line. `else if` needs no extra rule: it is an `else` whose
 statement is another `if`, and each `else` belongs to the nearest `if` that has
 none yet. `while (condition) statement` checks the condition before every pass
 and runs the body while it is true, so a condition that starts false runs the
-body zero times. A branch or loop body is a single statement, usually a block;
-without braces it is one statement on the same line, as in
-`while (n > 0) n = n - 1`.
+body zero times. A branch or loop body is a single statement, usually a block.
+An unbraced body may start on the same line or the next line, as in
+`while (n > 0) n = n - 1`. An ordinary expression still cannot span lines.
 `report <expression>` evaluates the expression and prints its value. An
 expression statement is an expression on its own line: it is evaluated, and in
 a file its value is thrown away. Statements cannot appear inside expressions,
