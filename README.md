@@ -22,8 +22,8 @@ Nier is a programming language designed for YoRHa androids and other operators w
 |---|---|
 | `./run <file>` | Runs a program: executes its statements in order. Only `report` statements print. |
 | `./run --tokenize <file>` | Prints the token stream. |
-| `./run --parse <file>` | Parses one statement per line and prints each tree. |
-| `./run --eval <file>` | Evaluates each line and prints its value, as in Lab 3. |
+| `./run --parse <file>` | Parses the program and prints each top-level statement's tree. |
+| `./run --eval <file>` | Runs statements and prints top-level expression values, as in Lab 3. |
 | `./run` | Starts the REPL, which runs statements and prints the value of a bare expression. |
 
 Exit codes: 0 when the file scans (and, with `--parse`, parses) cleanly, 65 when the scanner or parser rejects it, 70 when a successfully parsed program fails during evaluation, 64 for bad arguments or, with `--tokenize`, `--parse`, or `--eval`, a file that can't be read.
@@ -170,12 +170,14 @@ committed `.expected` file is compared against this format byte for byte.
 ## Grammar
 
 ```
-program     → declaration* EOF ;   (one declaration per line)
+program     → declaration* EOF ;
 declaration → unitDecl
             | statement ;
 unitDecl    → "unit" IDENTIFIER ( "=" expression )? ;
-statement   → reportStmt
+statement   → block
+            | reportStmt
             | exprStmt ;
+block       → "{" declaration* "}" ;
 reportStmt  → "report" expression ;
 exprStmt    → expression ;
 expression  → assignment ;
@@ -194,22 +196,22 @@ primary     → NUMBER | STRING | "active" | "inactive" | "void"
 ```
 
 `program` is the parser's entry point, `parse()`. It parses the whole file and
-returns a single program node holding the file's declarations in order. Each
-statement must end where its line ends: since the scanner does not emit a token
-for newlines, a token on a later line marks the end of the statement, the way a
-`;` would in other languages.
+returns a single program node holding the file's declarations in order. Blocks
+can span lines. Inside and outside blocks, a token on a later line marks the end
+of a simple statement, since the scanner does not emit newline tokens. A closing
+brace also ends the last statement inside its block.
 
 A declaration is either a `unit` declaration or a statement. `unit name =
 <expression>` creates a binding named `name` holding the expression's value;
 `unit name` alone holds `void`. A name on its own inside an expression reads
 the value bound to it.
 
-A statement is either a `report` statement or an expression statement.
+A statement is a block, a `report` statement, or an expression statement.
+A block holds declarations between `{` and `}` and runs them in a new scope.
 `report <expression>` evaluates the expression and prints its value. An
 expression statement is an expression on its own line: it is evaluated, and in
-a file its value is thrown away. Statements may only appear at the start of a
-line, so `report` cannot be used inside an expression (`1 + report 2` is a
-syntax error).
+a file its value is thrown away. Statements cannot appear inside expressions,
+so `1 + report 2` is a syntax error.
 
 Every mode reads a file with this same grammar and differs only in what it
 prints:
@@ -217,7 +219,7 @@ prints:
 | Mode | Prints |
 |---|---|
 | `./run <file>` | only what `report` statements print |
-| `./run --eval <file>` | the value of each expression statement, and whatever `report` prints |
+| `./run --eval <file>` | the value of each top-level expression statement, and whatever `report` prints |
 | `./run --parse <file>` | the tree of each statement |
 | REPL | what `report` prints, and the value of a bare expression |
 
@@ -236,10 +238,14 @@ the operand directly after it, so `not 1 + 2` is `(not 1) + 2`.
 
 ### Splitting rule
 
-A file holds one statement per line. The whole file is scanned, and the parser
-reads all of its tokens, ending each statement where its line ends.
+The whole file is scanned, and the parser reads all of its tokens. Simple
+statements end at a newline or their block's closing brace. A block continues
+across lines until its matching `}`.
 
 - Blank lines and comment-only lines hold no tokens, so they are skipped.
+- Blocks can be empty (`{}`) or nested. A statement can follow its opening
+  brace on the same line, as in `{ report 1 }`. After a block closes, the next
+  statement must start on a new line; enclosing closing braces may share a line.
 - An expression cannot continue onto the next line, even inside parentheses.
   `(1 +` on one line and `2)` on the next is two broken lines, not one
   expression.
@@ -247,9 +253,10 @@ reads all of its tokens, ending each statement where its line ends.
   the same line, is an error: the parser expects the line to end after the
   first statement.
 - A file with no statements at all, including one with only comments, is
-  rejected.
+  rejected. An empty block is a statement, so a file containing `{}` is valid.
 - After a syntax error the parser skips the rest of that line and starts again
-  on the next one (`synchronize()`), so each bad line gets its own diagnostic.
+  on the next one (`synchronize()`), preserving a closing brace for its block.
+  A missing closing brace reports `Expect '}' after block.`
 
 ## Parse output format
 
@@ -257,9 +264,11 @@ reads all of its tokens, ending each statement where its line ends.
 (+ 1.0 (* 2.0 3.0))
 ```
 
-One line of output per statement, in file order. Every operator node prints in
+One line of output per top-level statement, in file order. Every operator node prints in
 prefix form, wrapped in parentheses.
 
+- Blocks print as `(block statement ...)`, including their nested statements;
+  `{ report 1 }` prints `(block (report 1.0))` and `{}` prints `(block)`.
 - Expression statements print as: the expression's tree, as in Lab 2
 - `report` statements print as: `(report expression)`, e.g.
   `report 1 + 2` prints `(report (+ 1.0 2.0))`
@@ -595,10 +604,16 @@ unit/                  declaring with and without a value, redeclaring,
                        nothing
 assignment/            assigning a value, using assignment as an expression,
                        and right-associative chained assignment
+statements/            nested blocks execute their statements in order
+scope/                 shadowing and restoration, lookup two levels outward,
+                       assignment to an outer block and the nearest binding,
+                       and an uninitialized local hiding an outer value
 errors/                a runtime error, output printed before an error, a
                        report with no expression, an undefined name, a name
                        used before its unit line, a unit with no name, an
-                       assignment to an undeclared name, and an invalid target
+                       assignment to an undeclared name, an invalid target,
+                       expired block locals, malformed declarations in blocks,
+                       unclosed blocks, and excessive block nesting
 ```
 
 `tests/lab0/hello.mata` is now a real Nier program: four `report` lines that
@@ -644,6 +659,25 @@ Token(type=IDENTIFIER, lexeme=greeting, literal=null, line=5)
 Token(type=EOF, lexeme=, literal=null, line=5)
 ```
 
+### Runnable scope example
+
+Run `./run examples/combat-scope.mata` to simulate a shielded hit followed by
+a normal hit. The shielded block shadows `damage` and creates a local `armor`.
+A nested block calculates `hit` using those surrounding bindings and updates
+the global `hp`. After both blocks finish, the original `damage` is still 30
+and the local `armor` and `hit` are out of scope.
+
+Expected output:
+
+```text
+HP after shielded hit:
+85
+Base damage:
+30
+HP after normal hit:
+55
+```
+
 ## Design rationale
 
 - Braces over indentation
@@ -675,6 +709,10 @@ Nier already ends statements with a newline instead of a semicolon, so we made `
 
 ## Known limitations
 
+- Blocks may nest at most 128 levels. Deeper blocks produce
+  `Block nested too deeply.` with exit code 65.
+- The REPL reads one line at a time. Use a file for multiline blocks; a complete
+  block on one input line, such as `{ report 1 }`, works in the REPL.
 - Block comments are not supported, so every commented line needs its own `#`.
 - Diagnostics report a line number but no column, so a line with two problems
   points at the line twice.
@@ -713,4 +751,4 @@ Nier already ends statements with a newline instead of a semicolon, so we made `
 | Lab 1 | Nier defined: 15 keywords, brace-delimited blocks, newline statement termination, `#` line comments, double-quoted strings with escapes and no line spanning, integer and decimal numbers with no leading or trailing dot, letter-or-underscore identifiers. Logical negation is the `not` keyword. A bare `!` is a lexical error. Token output format frozen. Added `scan` for name-and-value state inspection, distinct from `report`'s value-only output. Added underscore digit separators in numeric literals, valid only between two digits. |
 | Lab 2 | Expression grammar added, loosest to tightest: `or`, `and`, `== !=`, `< <= > >=`, `+ -`, `* /`, then prefix `not` and `-`, then literals and parenthesized groups. Every binary operator is left-associative. `--parse` prints one prefix-form tree per line. One expression per line, and an expression cannot span lines. A file with no expressions is rejected. The parser reads the whole file and recovers at the next line after an error, so every bad line is reported. The REPL prints each line's parsed tree. Assignment and identifiers are not parsed yet. |
 | Lab 3 | Expressions now evaluate with `--eval`, and the REPL prints values. Values are numbers, strings, `active`/`inactive`, and `void`. `inactive` and `void` are false and everything else is true. `+` adds two numbers or joins two strings; arithmetic and comparison need numbers; equality works on any two values, and different types are never equal. `and` and `or` short-circuit. Division by zero is a runtime error. Runtime errors exit 70. Numbers print without a trailing `.0` and booleans print as `active` and `inactive`. |
-| Lab 4 | Programs run with plain `./run <file>`. A file is a list of statements, one per line: `report <expression>` prints a value, and an expression on its own line is evaluated without printing. `--parse` prints `report` statements as `(report ...)`, and `--eval` and the REPL still print bare expression values. `unit name = value` creates a binding and `unit name` holds `void`; names are read inside expressions. Assignment updates an existing binding, returns the assigned value, and associates right to left. Assigning to an undeclared name is a runtime error (exit 70), while assigning to a non-name is a syntax error (exit 65). Redeclaring a name rebinds it. Bindings are global and the REPL keeps them between lines. |
+| Lab 4 | Programs run with plain `./run <file>`. `report <expression>` prints a value, and a bare expression is evaluated without printing. Simple statements end at a newline or a closing brace; blocks can span lines. `--parse` prints statements as trees, including `(block ...)`, and `--eval` and the REPL still print top-level expression values. `unit name = value` creates a binding and `unit name` holds `void`; names are read inside expressions. Assignment updates an existing binding, returns the assigned value, and associates right to left. Assigning to an undeclared name is a runtime error (exit 70), while assigning to a non-name is a syntax error (exit 65). Redeclaring a name rebinds it in the current scope. Blocks create lexical scopes, allow shadowing, and restore the outer environment even after a runtime error. Lookup and assignment reach the nearest binding; block locals expire when the block ends. Global bindings persist between REPL lines. Missing closing braces report a syntax error, recovery preserves block boundaries, and nesting beyond 128 blocks is rejected with exit 65. |
