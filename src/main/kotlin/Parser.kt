@@ -2,6 +2,11 @@ class Parser(private val tokens: List<Token>) {
     private var current = 0
     private var exprLine = 0   // the line of the expression being parsed
     private val errors = mutableListOf<String>()
+    private var blockDepth = 0
+
+    private companion object {
+        const val MAX_BLOCK_DEPTH = 128
+    }
 
     // True at the end of the file, or when the next token is on a later line.
     private fun atLineEnd(): Boolean = isAtEnd() || peek().line != exprLine
@@ -177,7 +182,16 @@ class Parser(private val tokens: List<Token>) {
     private fun statement(): Stmt {
         if (match(TokenType.LEFT_BRACE)) {
             val line = previous().line
-            return Stmt.Block(statements(inBlock = true), line)
+            if (blockDepth == MAX_BLOCK_DEPTH) {
+                skipBlock()
+                throw ParseError("[line $line] Error: Block nested too deeply.")
+            }
+            blockDepth++
+            try {
+                return Stmt.Block(statements(inBlock = true), line)
+            } finally {
+                blockDepth--
+            }
         }
         if (match(TokenType.REPORT)) return reportStmt()
         return Stmt.Expression(expression())
@@ -185,6 +199,19 @@ class Parser(private val tokens: List<Token>) {
 
     // reportStmt → "report" expression
     private fun reportStmt(): Stmt = Stmt.Report(expression())
+
+    // The opening brace was consumed. Skip its contents without growing the stack.
+    private fun skipBlock() {
+        var remaining = 1
+        while (!isAtEnd() && remaining > 0) {
+            when (advance().type) {
+                TokenType.LEFT_BRACE -> remaining++
+                TokenType.RIGHT_BRACE -> remaining--
+                else -> Unit
+            }
+        }
+        exprLine = previous().line
+    }
 
     // program → declaration* EOF, one declaration per line
     fun parse(): Program {
