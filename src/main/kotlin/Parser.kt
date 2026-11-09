@@ -1,6 +1,7 @@
 class Parser(private val tokens: List<Token>) {
     private var current = 0
     private var exprLine = 0   // the line of the expression being parsed
+    private val errors = mutableListOf<String>()
 
     // True at the end of the file, or when the next token is on a later line.
     private fun atLineEnd(): Boolean = isAtEnd() || peek().line != exprLine
@@ -172,8 +173,12 @@ class Parser(private val tokens: List<Token>) {
         return Stmt.Unit(name, initializer)
     }
 
-    // statement → reportStmt | exprStmt
+    // statement → block | reportStmt | exprStmt
     private fun statement(): Stmt {
+        if (match(TokenType.LEFT_BRACE)) {
+            val line = previous().line
+            return Stmt.Block(statements(inBlock = true), line)
+        }
         if (match(TokenType.REPORT)) return reportStmt()
         return Stmt.Expression(expression())
     }
@@ -183,29 +188,40 @@ class Parser(private val tokens: List<Token>) {
 
     // program → declaration* EOF, one declaration per line
     fun parse(): Program {
-        val statements = mutableListOf<Stmt>()
-        val errors = mutableListOf<String>()
-        while (!isAtEnd()) {
-            exprLine = peek().line
-            try {
-                val stmt = declaration()
-                if (!atLineEnd()) throw error(peek(), "Expect end of statement.")
-                statements += stmt
-            } catch (_: StackOverflowError) {
-                errors += "[line $exprLine] Error: Expression nested too deeply."
-                synchronize()
-            } catch (e: ParseError) {
-                errors += e.message.orEmpty()
-                synchronize()
-            }
-        }
+        val statements = statements(inBlock = false)
         if (errors.isNotEmpty()) throw ParseError(errors.joinToString("\n"))
         if (statements.isEmpty()) throw ParseError("[line 1] Error: Expect statement.")
         return Program(statements)
     }
 
-    // After an error, skip the rest of the line; the next line starts fresh.
-    private fun synchronize() {
-        while (!atLineEnd()) advance()
+    // Braces span lines; individual declarations still end on their own line.
+    private fun statements(inBlock: Boolean): List<Stmt> {
+        val statements = mutableListOf<Stmt>()
+        while (!isAtEnd() && !(inBlock && peek().type == TokenType.RIGHT_BRACE)) {
+            exprLine = peek().line
+            try {
+                val stmt = declaration()
+                if (!atLineEnd() && !(inBlock && peek().type == TokenType.RIGHT_BRACE)) {
+                    throw error(peek(), "Expect end of statement.")
+                }
+                statements += stmt
+            } catch (_: StackOverflowError) {
+                errors += "[line $exprLine] Error: Expression nested too deeply."
+                synchronize(inBlock)
+            } catch (e: ParseError) {
+                errors += e.message.orEmpty()
+                synchronize(inBlock)
+            }
+        }
+        if (inBlock) {
+            if (isAtEnd()) throw error(peek(), "Expect '}' after block.")
+            exprLine = advance().line
+        }
+        return statements
+    }
+
+    // Skip the bad line, preserving a closing brace for its block.
+    private fun synchronize(inBlock: Boolean) {
+        while (!atLineEnd() && !(inBlock && peek().type == TokenType.RIGHT_BRACE)) advance()
     }
 }
