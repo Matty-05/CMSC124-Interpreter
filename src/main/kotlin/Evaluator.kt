@@ -4,6 +4,10 @@ object Evaluator {
 
     fun execute(stmt: Stmt) {
         when (stmt) {
+            is Stmt.If -> {
+                if (isTruthy(evaluate(stmt.condition))) execute(stmt.thenBranch)
+                else stmt.elseBranch?.let(::execute)
+            }
             is Stmt.Block -> executeBlock(stmt.statements, Environment(environment))
             is Stmt.Expression -> evaluate(stmt.expression)
             is Stmt.Report -> println(stringify(evaluate(stmt.expression)))
