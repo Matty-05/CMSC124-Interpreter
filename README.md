@@ -382,8 +382,9 @@ with code 70. The messages are:
   around it. Lookup starts in the innermost scope and walks outward, so which
   `x` a line means depends on where the line sits in the source.
 - Binding time and lookup: a name is looked up when its line runs, not when the
-  file is parsed. Using a name before its `unit` line has run is the
-  undefined-name error below.
+  file is parsed. Before a local `unit` declaration runs, lookup can still find
+  the nearest existing binding in an enclosing scope. The undefined-name error
+  occurs only when no binding exists in the current scope or any enclosing scope.
 - Shadowing: allowed. `unit x` inside a block creates a new `x` in that block
   and hides the outer one; the outer `x` is unchanged and visible again once
   the block ends. Assignment (`x = 2`) never creates a binding: it changes the
