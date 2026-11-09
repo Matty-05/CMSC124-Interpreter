@@ -8,6 +8,8 @@ object Evaluator {
                 if (isTruthy(evaluate(stmt.condition))) execute(stmt.thenBranch)
                 else stmt.elseBranch?.let(::execute)
             }
+            // The condition is checked again before every pass, so a false start runs the body zero times.
+            is Stmt.While -> while (isTruthy(evaluate(stmt.condition))) execute(stmt.body)
             is Stmt.Block -> executeBlock(stmt.statements, Environment(environment))
             is Stmt.Expression -> evaluate(stmt.expression)
             is Stmt.Report -> println(stringify(evaluate(stmt.expression)))

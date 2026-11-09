@@ -4,10 +4,12 @@ class Parser(private val tokens: List<Token>) {
     private val errors = mutableListOf<String>()
     private var blockDepth = 0
     private var ifDepth = 0
+    private var whileDepth = 0
 
     private companion object {
         const val MAX_BLOCK_DEPTH = 128
         const val MAX_IF_DEPTH = 128
+        const val MAX_WHILE_DEPTH = 128
     }
 
     // True at the end of the file, or when the next token is on a later line.
@@ -180,9 +182,10 @@ class Parser(private val tokens: List<Token>) {
         return Stmt.Unit(name, initializer)
     }
 
-    // statement → ifStmt | block | reportStmt | exprStmt
+    // statement → ifStmt | whileStmt | block | reportStmt | exprStmt
     private fun statement(): Stmt {
         if (match(TokenType.IF)) return ifStmt()
+        if (match(TokenType.WHILE)) return whileStmt()
         if (match(TokenType.LEFT_BRACE)) {
             val line = previous().line
             if (blockDepth == MAX_BLOCK_DEPTH) {
@@ -225,6 +228,24 @@ class Parser(private val tokens: List<Token>) {
             return Stmt.If(condition, thenBranch, elseBranch, keyword.line)
         } finally {
             ifDepth--
+        }
+    }
+
+    // whileStmt → "while" "(" expression ")" statement
+    private fun whileStmt(): Stmt {
+        val keyword = previous()
+        if (whileDepth == MAX_WHILE_DEPTH) {
+            throw ParseError("[line ${keyword.line}] Error: Loop nested too deeply.")
+        }
+        whileDepth++
+        try {
+            consume(TokenType.LEFT_PAREN, "Expect '(' after 'while'.")
+            val condition = expression()
+            consume(TokenType.RIGHT_PAREN, "Expect ')' after condition.")
+            exprLine = peek().line
+            return Stmt.While(condition, statement(), keyword.line)
+        } finally {
+            whileDepth--
         }
     }
 

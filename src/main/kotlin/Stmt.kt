@@ -1,5 +1,7 @@
 sealed class Stmt {
     class If(val condition: Expr, val thenBranch: Stmt, val elseBranch: Stmt?, val line: Int) : Stmt()
+    // whileStmt -> "while" "(" expression ")" statement
+    class While(val condition: Expr, val body: Stmt, val line: Int) : Stmt()
     class Block(val statements: List<Stmt>, val line: Int) : Stmt()
     // exprStmt -> expression
     class Expression(val expression: Expr) : Stmt()
