@@ -1,8 +1,9 @@
+unit step = 10
 unit i = 0
-unit last = void
 while (i < 2) {
-    unit step = i * 10
-    last = step
+    unit step = step + 1
+    report step  # expect: 11
+                 # expect: 11
     i = i + 1
 }
-report last  # expect: 10
+report step  # expect: 10
