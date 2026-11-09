@@ -174,9 +174,13 @@ program     → declaration* EOF ;
 declaration → unitDecl
             | statement ;
 unitDecl    → "unit" IDENTIFIER ( "=" expression )? ;
-statement   → block
+statement   → ifStmt
+            | whileStmt
+            | block
             | reportStmt
             | exprStmt ;
+ifStmt      → "if" "(" expression ")" statement ( "else" statement )? ;
+whileStmt   → "while" "(" expression ")" statement ;
 block       → "{" declaration* "}" ;
 reportStmt  → "report" expression ;
 exprStmt    → expression ;
@@ -206,8 +210,18 @@ A declaration is either a `unit` declaration or a statement. `unit name =
 `unit name` alone holds `void`. A name on its own inside an expression reads
 the value bound to it.
 
-A statement is a block, a `report` statement, or an expression statement.
+A statement is an `if` statement, a `while` loop, a block, a `report`
+statement, or an expression statement.
 A block holds declarations between `{` and `}` and runs them in a new scope.
+`if (condition) statement else statement` runs only the branch the condition
+picks, using the truthiness rule from Lab 3; the `else` part is optional and may
+start on the next line. `else if` needs no extra rule: it is an `else` whose
+statement is another `if`, and each `else` belongs to the nearest `if` that has
+none yet. `while (condition) statement` checks the condition before every pass
+and runs the body while it is true, so a condition that starts false runs the
+body zero times. A branch or loop body is a single statement, usually a block.
+An unbraced body may start on the same line or the next line, as in
+`while (n > 0) n = n - 1`. An ordinary expression still cannot span lines.
 `report <expression>` evaluates the expression and prints its value. An
 expression statement is an expression on its own line: it is evaluated, and in
 a file its value is thrown away. Statements cannot appear inside expressions,
@@ -269,6 +283,11 @@ prefix form, wrapped in parentheses.
 
 - Blocks print as `(block statement ...)`, including their nested statements;
   `{ report 1 }` prints `(block (report 1.0))` and `{}` prints `(block)`.
+- `if` prints as `(if condition then else)`, leaving out `else` when there is
+  none: `if (x > 0) report 1 else report 2` prints
+  `(if (> x 0.0) (report 1.0) (report 2.0))`.
+- `while` prints as `(while condition body)`: `while (i < 2) i = i + 1`
+  prints `(while (< i 2.0) (= i (+ i 1.0)))`.
 - Expression statements print as: the expression's tree, as in Lab 2
 - `report` statements print as: `(report expression)`, e.g.
   `report 1 + 2` prints `(report (+ 1.0 2.0))`
@@ -400,7 +419,14 @@ with code 70. The messages are:
 ### Control flow and functions
 
 - Logical operators return: `active` or `inactive`, never the operand itself
-- Dangling else binds to: [which if]
+- Dangling else binds to: the nearest `if` without an `else`. The parser reads
+  the inner `if` first, so it is still parsing that `if` when the `else`
+  arrives. `if (a) if (b) report 1 else report 2` prints `2` when `a` is true
+  and `b` is false, and nothing when `a` is false.
+- Repetition: `while` loops. The condition uses the Lab 3 truthiness rule, and
+  a block body gets a fresh scope on every pass, so its units do not survive
+  from one pass to the next or after the loop. `for` arrives in Lab 5 week 2 as
+  a rewrite into `while`.
 - Closure capture of a loop variable: [per iteration, or shared]
 - Function with no return statement produces: [value]
 - Arity mismatch: [message and exit code]
@@ -630,6 +656,23 @@ python3 run_tests.py tests/lab1
 python3 run_tests.py tests/lab2
 python3 run_tests.py tests/lab3
 python3 run_tests.py tests/lab4
+python3 run_tests.py tests/lab5
+```
+
+Lab 5 tests are inline and run with plain `./run`, like Lab 4. A loop that
+prints several lines lists one `# expect:` per printed line, stacked under the
+`report`, because the harness matches stdout lines in file order.
+
+```
+conditionals/  each branch, else if, a missing else, nested ifs, the nearest
+               else, else on the next line, truthiness, short-circuiting, and
+               scope inside a branch
+loops/         three passes, zero passes, a single-statement body, a sum,
+               nested loops, an if inside a loop, a truthy non-boolean
+               condition, and a fresh body scope on each pass
+errors/        missing parentheses, conditions and branches for if and while,
+               runtime errors in a condition, expired branch and loop locals,
+               and excessive nesting
 ```
 
 ## Sample code
@@ -753,3 +796,4 @@ Nier already ends statements with a newline instead of a semicolon, so we made `
 | Lab 2 | Expression grammar added, loosest to tightest: `or`, `and`, `== !=`, `< <= > >=`, `+ -`, `* /`, then prefix `not` and `-`, then literals and parenthesized groups. Every binary operator is left-associative. `--parse` prints one prefix-form tree per line. One expression per line, and an expression cannot span lines. A file with no expressions is rejected. The parser reads the whole file and recovers at the next line after an error, so every bad line is reported. The REPL prints each line's parsed tree. Assignment and identifiers are not parsed yet. |
 | Lab 3 | Expressions now evaluate with `--eval`, and the REPL prints values. Values are numbers, strings, `active`/`inactive`, and `void`. `inactive` and `void` are false and everything else is true. `+` adds two numbers or joins two strings; arithmetic and comparison need numbers; equality works on any two values, and different types are never equal. `and` and `or` short-circuit. Division by zero is a runtime error. Runtime errors exit 70. Numbers print without a trailing `.0` and booleans print as `active` and `inactive`. |
 | Lab 4 | Programs run with plain `./run <file>`. `report <expression>` prints a value, and a bare expression is evaluated without printing. Simple statements end at a newline or a closing brace; blocks can span lines. `--parse` prints statements as trees, including `(block ...)`, and `--eval` and the REPL still print top-level expression values. `unit name = value` creates a binding and `unit name` holds `void`; names are read inside expressions. Assignment updates an existing binding, returns the assigned value, and associates right to left. Assigning to an undeclared name is a runtime error (exit 70), while assigning to a non-name is a syntax error (exit 65). Redeclaring a name rebinds it in the current scope. Blocks create lexical scopes, allow shadowing, and restore the outer environment even after a runtime error. Lookup and assignment reach the nearest binding; block locals expire when the block ends. Global bindings persist between REPL lines. Missing closing braces report a syntax error, recovery preserves block boundaries, and nesting beyond 128 blocks is rejected with exit 65. |
+| Lab 5 | `if`/`else` and `while` added. `if` runs only the branch its condition picks; `else` is optional, may start on the next line, and binds to the nearest `if`. `while` checks its condition before every pass, so it can run zero times. Both use the Lab 3 truthiness rule, and a block body gets its own scope. Missing parentheses or bodies are syntax errors (exit 65), and nesting beyond 128 `if`s or loops is rejected. |

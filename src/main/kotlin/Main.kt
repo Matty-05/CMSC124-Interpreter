@@ -146,6 +146,7 @@ fun runPrompt() {
 
 private fun statementLine(stmt: Stmt): Int = when (stmt) {
     is Stmt.If -> stmt.line
+    is Stmt.While -> stmt.line
     is Stmt.Block -> stmt.line
     is Stmt.Expression -> expressionLine(stmt.expression)
     is Stmt.Report -> expressionLine(stmt.expression)

@@ -1,6 +1,7 @@
 object AstPrinter {
     fun print(stmt: Stmt): String = when (stmt) {
         is Stmt.If -> "(if ${print(stmt.condition)} ${print(stmt.thenBranch)}${stmt.elseBranch?.let { " ${print(it)}" }.orEmpty()})"
+        is Stmt.While -> "(while ${print(stmt.condition)} ${print(stmt.body)})"
         is Stmt.Block -> "(block${stmt.statements.joinToString("") { " ${print(it)}" }})"
         is Stmt.Expression -> print(stmt.expression)
         is Stmt.Report -> "(report ${print(stmt.expression)})"
