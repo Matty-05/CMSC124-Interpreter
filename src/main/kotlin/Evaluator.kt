@@ -1,9 +1,36 @@
 object Evaluator {
+    // Current scope; the global environment persists between REPL lines.
+    private var environment = Environment()
+
+    fun execute(stmt: Stmt) {
+        when (stmt) {
+            is Stmt.Block -> executeBlock(stmt.statements, Environment(environment))
+            is Stmt.Expression -> evaluate(stmt.expression)
+            is Stmt.Report -> println(stringify(evaluate(stmt.expression)))
+            // A unit with no value holds void.
+            is Stmt.Unit -> environment.define(stmt.name.lexeme, stmt.initializer?.let { evaluate(it) })
+        }
+    }
+
+    private fun executeBlock(statements: List<Stmt>, scope: Environment) {
+        val previous = environment
+        try {
+            environment = scope
+            statements.forEach(::execute)
+        } finally {
+            environment = previous
+        }
+    }
+
     fun evaluate(expr: Expr): Any? = when (expr) {
-        // Main prints each expression's value; evaluating a whole program yields the last one.
-        is Expr.Program -> expr.expressions.map(::evaluate).last()
         is Expr.Literal -> expr.value
         is Expr.Grouping -> evaluate(expr.expression)
+        is Expr.Variable -> environment.get(expr.name)
+        is Expr.Assign -> {
+            val value = evaluate(expr.value)
+            environment.assign(expr.name, value)
+            value
+        }
         is Expr.Unary -> {
             val right = evaluate(expr.right)
             when (expr.operator.type) {

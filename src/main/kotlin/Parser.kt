@@ -1,6 +1,12 @@
 class Parser(private val tokens: List<Token>) {
     private var current = 0
     private var exprLine = 0   // the line of the expression being parsed
+    private val errors = mutableListOf<String>()
+    private var blockDepth = 0
+
+    private companion object {
+        const val MAX_BLOCK_DEPTH = 128
+    }
 
     // True at the end of the file, or when the next token is on a later line.
     private fun atLineEnd(): Boolean = isAtEnd() || peek().line != exprLine
@@ -46,7 +52,7 @@ class Parser(private val tokens: List<Token>) {
 
     class ParseError(message: String) : RuntimeException(message)
 
-    // primary → NUMBER | STRING | "active" | "inactive" | "void" | "(" expression ")"
+    // primary → NUMBER | STRING | "active" | "inactive" | "void" | IDENTIFIER | "(" expression ")"
     private fun primary(): Expr {
         if (match(TokenType.NUMBER, TokenType.STRING)) {
             return Expr.Literal(previous().literal)
@@ -54,6 +60,7 @@ class Parser(private val tokens: List<Token>) {
         if (match(TokenType.ACTIVE)) return Expr.Literal(true)
         if (match(TokenType.INACTIVE)) return Expr.Literal(false)
         if (match(TokenType.VOID)) return Expr.Literal(null)
+        if (match(TokenType.IDENTIFIER)) return Expr.Variable(previous())
 
         if (match(TokenType.LEFT_PAREN)) {
             val expr = expression()
@@ -140,35 +147,108 @@ class Parser(private val tokens: List<Token>) {
         return expr
     }
 
-    // expression → or
-    private fun expression(): Expr = or()
+    // assignment → IDENTIFIER "=" assignment | or
+    private fun assignment(): Expr {
+        val expr = or()
 
+        if (match(TokenType.EQUAL)) {
+            val equals = previous()
+            val value = assignment()
 
-    // program → expression* EOF, one expression per line
-    fun parse(): Expr.Program {
-        val expressions = mutableListOf<Expr>()
-        val errors = mutableListOf<String>()
-        while (!isAtEnd()) {
-            exprLine = peek().line
-            try {
-                val expr = expression()
-                if (!atLineEnd()) throw error(peek(), "Expect end of expression.")
-                expressions += expr
-            } catch (_: StackOverflowError) {
-                errors += "[line $exprLine] Error: Expression nested too deeply."
-                synchronize()
-            } catch (e: ParseError) {
-                errors += e.message.orEmpty()
-                synchronize()
-            }
+            if (expr is Expr.Variable) return Expr.Assign(expr.name, value)
+            throw error(equals, "Invalid assignment target.")
         }
-        if (errors.isNotEmpty()) throw ParseError(errors.joinToString("\n"))
-        if (expressions.isEmpty()) throw ParseError("[line 1] Error: Expect expression.")
-        return Expr.Program(expressions)
+
+        return expr
     }
 
-    // After an error, skip the rest of the line; the next line starts fresh.
-    private fun synchronize() {
-        while (!atLineEnd()) advance()
+    // expression → assignment
+    private fun expression(): Expr = assignment()
+
+    // declaration → unitDecl | statement
+    private fun declaration(): Stmt {
+        if (match(TokenType.UNIT)) return unitDecl()
+        return statement()
+    }
+
+    // unitDecl → "unit" IDENTIFIER ( "=" expression )?
+    private fun unitDecl(): Stmt {
+        val name = consume(TokenType.IDENTIFIER, "Expect unit name.")
+        val initializer = if (match(TokenType.EQUAL)) expression() else null
+        return Stmt.Unit(name, initializer)
+    }
+
+    // statement → block | reportStmt | exprStmt
+    private fun statement(): Stmt {
+        if (match(TokenType.LEFT_BRACE)) {
+            val line = previous().line
+            if (blockDepth == MAX_BLOCK_DEPTH) {
+                skipBlock()
+                throw ParseError("[line $line] Error: Block nested too deeply.")
+            }
+            blockDepth++
+            try {
+                return Stmt.Block(statements(inBlock = true), line)
+            } finally {
+                blockDepth--
+            }
+        }
+        if (match(TokenType.REPORT)) return reportStmt()
+        return Stmt.Expression(expression())
+    }
+
+    // reportStmt → "report" expression
+    private fun reportStmt(): Stmt = Stmt.Report(expression())
+
+    // The opening brace was consumed. Skip its contents without growing the stack.
+    private fun skipBlock() {
+        var remaining = 1
+        while (!isAtEnd() && remaining > 0) {
+            when (advance().type) {
+                TokenType.LEFT_BRACE -> remaining++
+                TokenType.RIGHT_BRACE -> remaining--
+                else -> Unit
+            }
+        }
+        exprLine = previous().line
+    }
+
+    // program → declaration* EOF, one declaration per line
+    fun parse(): Program {
+        val statements = statements(inBlock = false)
+        if (errors.isNotEmpty()) throw ParseError(errors.joinToString("\n"))
+        if (statements.isEmpty()) throw ParseError("[line 1] Error: Expect statement.")
+        return Program(statements)
+    }
+
+    // Braces span lines; individual declarations still end on their own line.
+    private fun statements(inBlock: Boolean): List<Stmt> {
+        val statements = mutableListOf<Stmt>()
+        while (!isAtEnd() && !(inBlock && peek().type == TokenType.RIGHT_BRACE)) {
+            exprLine = peek().line
+            try {
+                val stmt = declaration()
+                if (!atLineEnd() && !(inBlock && peek().type == TokenType.RIGHT_BRACE)) {
+                    throw error(peek(), "Expect end of statement.")
+                }
+                statements += stmt
+            } catch (_: StackOverflowError) {
+                errors += "[line $exprLine] Error: Expression nested too deeply."
+                synchronize(inBlock)
+            } catch (e: ParseError) {
+                errors += e.message.orEmpty()
+                synchronize(inBlock)
+            }
+        }
+        if (inBlock) {
+            if (isAtEnd()) throw error(peek(), "Expect '}' after block.")
+            exprLine = advance().line
+        }
+        return statements
+    }
+
+    // Skip the bad line, preserving a closing brace for its block.
+    private fun synchronize(inBlock: Boolean) {
+        while (!atLineEnd() && !(inBlock && peek().type == TokenType.RIGHT_BRACE)) advance()
     }
 }

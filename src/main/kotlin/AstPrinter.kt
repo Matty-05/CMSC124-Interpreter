@@ -1,4 +1,11 @@
 object AstPrinter {
+    fun print(stmt: Stmt): String = when (stmt) {
+        is Stmt.Block -> "(block${stmt.statements.joinToString("") { " ${print(it)}" }})"
+        is Stmt.Expression -> print(stmt.expression)
+        is Stmt.Report -> "(report ${print(stmt.expression)})"
+        is Stmt.Unit -> stmt.initializer?.let { "(unit ${stmt.name.lexeme} ${print(it)})" } ?: "(unit ${stmt.name.lexeme})"
+    }
+
     // Walks any Expr node and returns its prefix-parenthesized string form,
     // e.g. (+ 1.0 2.0). One branch per node type defined in Expr.kt.
     fun print(expr: Expr): String {
@@ -7,7 +14,8 @@ object AstPrinter {
             is Expr.Binary -> parenthesize(expr.operator.lexeme, expr.left, expr.right)
             is Expr.Unary -> parenthesize(expr.operator.lexeme, expr.right)
             is Expr.Grouping -> parenthesize("group", expr.expression)
-            is Expr.Program -> expr.expressions.joinToString("\n") { print(it) }
+            is Expr.Variable -> expr.name.lexeme
+            is Expr.Assign -> "(= ${expr.name.lexeme} ${print(expr.value)})"
         }
     }
 
