@@ -3,9 +3,11 @@ class Parser(private val tokens: List<Token>) {
     private var exprLine = 0   // the line of the expression being parsed
     private val errors = mutableListOf<String>()
     private var blockDepth = 0
+    private var ifDepth = 0
 
     private companion object {
         const val MAX_BLOCK_DEPTH = 128
+        const val MAX_IF_DEPTH = 128
     }
 
     // True at the end of the file, or when the next token is on a later line.
@@ -178,8 +180,9 @@ class Parser(private val tokens: List<Token>) {
         return Stmt.Unit(name, initializer)
     }
 
-    // statement → block | reportStmt | exprStmt
+    // statement → ifStmt | block | reportStmt | exprStmt
     private fun statement(): Stmt {
+        if (match(TokenType.IF)) return ifStmt()
         if (match(TokenType.LEFT_BRACE)) {
             val line = previous().line
             if (blockDepth == MAX_BLOCK_DEPTH) {
@@ -199,6 +202,31 @@ class Parser(private val tokens: List<Token>) {
 
     // reportStmt → "report" expression
     private fun reportStmt(): Stmt = Stmt.Report(expression())
+
+    // ifStmt → "if" "(" expression ")" statement ( "else" statement )?
+    // Parsing the inner statement first binds else to the nearest unmatched if.
+    private fun ifStmt(): Stmt {
+        val keyword = previous()
+        if (ifDepth == MAX_IF_DEPTH) {
+            throw ParseError("[line ${keyword.line}] Error: Conditional nested too deeply.")
+        }
+        ifDepth++
+        try {
+            consume(TokenType.LEFT_PAREN, "Expect '(' after 'if'.")
+            val condition = expression()
+            consume(TokenType.RIGHT_PAREN, "Expect ')' after condition.")
+            exprLine = peek().line
+            val thenBranch = statement()
+            val elseBranch = if (peek().type == TokenType.ELSE) {
+                advance()
+                exprLine = peek().line
+                statement()
+            } else null
+            return Stmt.If(condition, thenBranch, elseBranch, keyword.line)
+        } finally {
+            ifDepth--
+        }
+    }
 
     // The opening brace was consumed. Skip its contents without growing the stack.
     private fun skipBlock() {
