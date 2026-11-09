@@ -1,13 +1,24 @@
 object Evaluator {
-    // Global bindings; kept between REPL lines.
-    private val environment = Environment()
+    // Current scope; the global environment persists between REPL lines.
+    private var environment = Environment()
 
     fun execute(stmt: Stmt) {
         when (stmt) {
+            is Stmt.Block -> executeBlock(stmt.statements, Environment(environment))
             is Stmt.Expression -> evaluate(stmt.expression)
             is Stmt.Report -> println(stringify(evaluate(stmt.expression)))
             // A unit with no value holds void.
             is Stmt.Unit -> environment.define(stmt.name.lexeme, stmt.initializer?.let { evaluate(it) })
+        }
+    }
+
+    private fun executeBlock(statements: List<Stmt>, scope: Environment) {
+        val previous = environment
+        try {
+            environment = scope
+            statements.forEach(::execute)
+        } finally {
+            environment = previous
         }
     }
 
