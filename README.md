@@ -223,6 +223,8 @@ the value bound to it.
 `protocol add(a, b) { transmit a + b }` defines a callable in the current
 scope. Its body must be a block; the opening brace can start on the next line.
 The name and parameter list stay on one line, with at most 255 parameters.
+Parameter names must be unique within a protocol; a duplicate reports
+`Duplicate parameter 'a'.` (exit 65). Separate protocols may reuse names.
 `transmit value` exits the current protocol with that value, including from
 inside nested blocks, conditionals, and loops. A bare `transmit` or reaching
 the end of the body produces `void`. A transmit expression stays on its line;
@@ -861,6 +863,10 @@ Nier already ends statements with a newline instead of a semicolon, so we made `
 
 ## Known limitations
 
+- Protocol calls use the JVM call stack; there is no tail-call optimization.
+  Excessive recursion reports `Stack overflow: protocol calls nested too deeply.`
+  as a runtime error (exit 70 in file mode). The available depth depends on the
+  JVM stack size and the code being evaluated; the REPL returns to its prompt.
 - Blocks may nest at most 128 levels. Deeper blocks produce
   `Block nested too deeply.` with exit code 65.
 - The REPL reads one line at a time. Use a file for multiline blocks; a complete
@@ -905,3 +911,4 @@ Nier already ends statements with a newline instead of a semicolon, so we made `
 | Lab 3 | Expressions now evaluate with `--eval`, and the REPL prints values. Values are numbers, strings, `active`/`inactive`, and `void`. `inactive` and `void` are false and everything else is true. `+` adds two numbers or joins two strings; arithmetic and comparison need numbers; equality works on any two values, and different types are never equal. `and` and `or` short-circuit. Division by zero is a runtime error. Runtime errors exit 70. Numbers print without a trailing `.0` and booleans print as `active` and `inactive`. |
 | Lab 4 | Programs run with plain `./run <file>`. `report <expression>` prints a value, and a bare expression is evaluated without printing. Simple statements end at a newline or a closing brace; blocks can span lines. `--parse` prints statements as trees, including `(block ...)`, and `--eval` and the REPL still print top-level expression values. `unit name = value` creates a binding and `unit name` holds `void`; names are read inside expressions. Assignment updates an existing binding, returns the assigned value, and associates right to left. Assigning to an undeclared name is a runtime error (exit 70), while assigning to a non-name is a syntax error (exit 65). Redeclaring a name rebinds it in the current scope. Blocks create lexical scopes, allow shadowing, and restore the outer environment even after a runtime error. Lookup and assignment reach the nearest binding; block locals expire when the block ends. Global bindings persist between REPL lines. Missing closing braces report a syntax error, recovery preserves block boundaries, and nesting beyond 128 blocks is rejected with exit 65. |
 | Lab 5 | `if`/`else` and `while` added. `if` runs only the branch its condition picks; `else` is optional, may start on the next line, and binds to the nearest `if`. `while` checks its condition before every pass, so it can run zero times. Both use the Lab 3 truthiness rule, and a block body gets its own scope. Missing parentheses or bodies are syntax errors (exit 65), and nesting beyond 128 `if`s or loops is rejected. `for (initializer, condition, increment)` added with comma-separated, optional clauses; the parser rewrites it into a block and a `while`, so the loop variable is scoped to the loop and shared by every pass. Calls added: `callee(arguments)`, chainable as `f()()`, at most 255 arguments, on one line. Calling a non-callable value or passing the wrong number of arguments is a runtime error (exit 70). `clock()` is the first native function. Protocol declarations and transmit added, with lexical environment capture, fresh parameter bindings per call, void results for bare or missing transmit, a 255-parameter limit, and escaping closures with independent state. Transmit outside a protocol is rejected before execution (exit 65). |
+
