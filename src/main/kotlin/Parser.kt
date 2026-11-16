@@ -207,12 +207,17 @@ class Parser(private val tokens: List<Token>) {
         val name = consume(TokenType.IDENTIFIER, "Expect protocol name.")
         consume(TokenType.LEFT_PAREN, "Expect '(' after protocol name.")
         val parameters = mutableListOf<Token>()
+        val parameterNames = mutableSetOf<String>()
         if (!check(TokenType.RIGHT_PAREN)) {
             do {
                 if (parameters.size == MAX_PARAMETERS) {
                     throw error(peek(), "Can't have more than $MAX_PARAMETERS parameters.")
                 }
-                parameters += consume(TokenType.IDENTIFIER, "Expect parameter name.")
+                val parameter = consume(TokenType.IDENTIFIER, "Expect parameter name.")
+                if (!parameterNames.add(parameter.lexeme)) {
+                    throw error(parameter, "Duplicate parameter '${parameter.lexeme}'.")
+                }
+                parameters += parameter
             } while (match(TokenType.COMMA))
         }
         consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.")
