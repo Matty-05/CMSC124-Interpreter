@@ -176,11 +176,14 @@ declaration → unitDecl
 unitDecl    → "unit" IDENTIFIER ( "=" expression )? ;
 statement   → ifStmt
             | whileStmt
+            | forStmt
             | block
             | reportStmt
             | exprStmt ;
 ifStmt      → "if" "(" expression ")" statement ( "else" statement )? ;
 whileStmt   → "while" "(" expression ")" statement ;
+forStmt     → "for" "(" ( unitDecl | expression )? ","
+              expression? "," expression? ")" statement ;
 block       → "{" declaration* "}" ;
 reportStmt  → "report" expression ;
 exprStmt    → expression ;
@@ -194,7 +197,9 @@ comparison  → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
 term        → factor ( ( "+" | "-" ) factor )* ;
 factor      → unary ( ( "*" | "/" ) unary )* ;
 unary       → ( "not" | "-" ) unary
-            | primary ;
+            | call ;
+call        → primary ( "(" arguments? ")" )* ;
+arguments   → expression ( "," expression )* ;
 primary     → NUMBER | STRING | "active" | "inactive" | "void"
             | IDENTIFIER | "(" expression ")" ;
 ```
@@ -222,6 +227,31 @@ and runs the body while it is true, so a condition that starts false runs the
 body zero times. A branch or loop body is a single statement, usually a block.
 An unbraced body may start on the same line or the next line, as in
 `while (n > 0) n = n - 1`. An ordinary expression still cannot span lines.
+
+`for (initializer, condition, increment) statement` is a counted loop. Nier
+has no `;`, so the three clauses are separated by commas, and all three must
+sit on the `for` line. Each clause is optional but both commas are required:
+`for (, i < 3,)` has only a condition, and `for (,,)` loops forever. The
+initializer is a `unit` declaration or an expression. The parser builds no
+`for` node. It rewrites the loop into the statements Nier already has:
+
+```
+for (unit i = 0, i < 3, i = i + 1) report i
+
+{
+    unit i = 0
+    while (i < 3) {
+        report i
+        i = i + 1
+    }
+}
+```
+
+A call is a primary followed by any number of argument lists, so `f()()` calls
+the result of `f()`. Calls bind tighter than unary operators: `-f(1)` negates
+the result. The `(` must be on the same line as what it calls, and a call can
+pass at most 255 arguments.
+
 `report <expression>` evaluates the expression and prints its value. An
 expression statement is an expression on its own line: it is evaluated, and in
 a file its value is thrown away. Statements cannot appear inside expressions,
@@ -288,6 +318,13 @@ prefix form, wrapped in parentheses.
   `(if (> x 0.0) (report 1.0) (report 2.0))`.
 - `while` prints as `(while condition body)`: `while (i < 2) i = i + 1`
   prints `(while (< i 2.0) (= i (+ i 1.0)))`.
+- `for` prints as its `while` form: `for (unit i = 0, i < 3, i = i + 1)
+  report i` prints
+  `(block (unit i 0.0) (while (< i 3.0) (block (report i) (= i (+ i 1.0)))))`.
+  A missing condition prints as `true`, and with no initializer there is no
+  outer block.
+- Calls print as: `(call callee argument ...)`, e.g. `add(1, 2)` prints
+  `(call add 1.0 2.0)` and `clock()` prints `(call clock)`
 - Expression statements print as: the expression's tree, as in Lab 2
 - `report` statements print as: `(report expression)`, e.g.
   `report 1 + 2` prints `(report (+ 1.0 2.0))`
@@ -425,17 +462,32 @@ with code 70. The messages are:
   and `b` is false, and nothing when `a` is false.
 - Repetition: `while` loops. The condition uses the Lab 3 truthiness rule, and
   a block body gets a fresh scope on every pass, so its units do not survive
-  from one pass to the next or after the loop. `for` arrives in Lab 5 week 2 as
-  a rewrite into `while`.
-- Closure capture of a loop variable: [per iteration, or shared]
+  from one pass to the next or after the loop.
+- `for` loop variable: scoped to the loop. `for` is rewritten into a block
+  holding the initializer and a `while`, so `i` in
+  `for (unit i = 0, i < 3, i = i + 1)` is gone after the loop
+  (`Undefined variable 'i'.`) and an outer `i` is untouched.
+- Closure capture of a loop variable: shared. The initializer runs once, so
+  there is one `i` for the whole loop, and every pass reads and updates that
+  same binding. Units declared inside a block body are still fresh each pass.
+- Calling: the callee and then the arguments are evaluated left to right,
+  before any check. Only a callable value can be called; anything else, such as
+  `5()` or `"text"()`, is the runtime error `Can only call protocols.`
 - Function with no return statement produces: [value]
-- Arity mismatch: [message and exit code]
+- Arity mismatch: a runtime error with exit 70, `Expected 2 arguments but got
+  1.` The count must match exactly; extra arguments are not dropped and missing
+  ones are not filled with `void`, since a wrong count is almost always a
+  mistake. The check happens in one place for protocols and native functions.
 
 ## Native functions
 
 | Name | Arguments | Returns | Notes |
 |---|---|---|---|
-| [name] | [count and types] | [type] | [caveats] |
+| `clock` | 0 | number | Seconds since the Unix epoch, with a millisecond fraction. Only differences between two calls are meaningful. Prints as `<native clock>`. |
+
+Native functions are defined in the global scope before the program starts, so
+they are ordinary bindings: `unit now = clock` copies the function, and
+`unit clock = 1` in the same scope replaces it.
 
 ## Errors and diagnostics
 
@@ -457,6 +509,17 @@ ran out:
 [line 1] Error at end: Expect ')' after expression.
 [line 1] Error: Expect statement.
 ```
+
+Lab 5 adds these parser messages, all exit 65:
+
+| Source | Message |
+|---|---|
+| `for unit i = 0, ...` | `Expect '(' after 'for'.` |
+| `for (unit i = 0)` | `Expect ',' after loop initializer.` |
+| `for (unit i = 0, i < 3)` | `Expect ',' after loop condition.` |
+| `for (unit i = 0, i < 3, i = i + 1` | `Expect ')' after for clauses.` |
+| `clock(1` | `Expect ')' after arguments.` |
+| a call with 256 arguments | `Can't have more than 255 arguments.` |
 
 `Expect end of statement.` means something was left on the line after a
 complete statement, as in `1 2` or `1 report 2`. The last form is for a file
@@ -669,10 +732,16 @@ conditionals/  each branch, else if, a missing else, nested ifs, the nearest
                scope inside a branch
 loops/         three passes, zero passes, a single-statement body, a sum,
                nested loops, an if inside a loop, a truthy non-boolean
-               condition, and a fresh body scope on each pass
+               condition, and a fresh body scope on each pass; for-*: three
+               passes, zero passes, a single-statement body, left-out
+               clauses, nesting, and shadowing an outer unit
+calls/         clock() called, compared, printed, and copied to another unit
 errors/        missing parentheses, conditions and branches for if and while,
                runtime errors in a condition, expired branch and loop locals,
-               and excessive nesting
+               and excessive nesting; for with a missing parenthesis, comma or
+               body and its expired loop unit; calling a number, a string, a
+               call's result or an undefined name; clock(1); an unclosed or
+               256-argument call; and a ( on the line after its callee
 ```
 
 ## Sample code
@@ -796,4 +865,4 @@ Nier already ends statements with a newline instead of a semicolon, so we made `
 | Lab 2 | Expression grammar added, loosest to tightest: `or`, `and`, `== !=`, `< <= > >=`, `+ -`, `* /`, then prefix `not` and `-`, then literals and parenthesized groups. Every binary operator is left-associative. `--parse` prints one prefix-form tree per line. One expression per line, and an expression cannot span lines. A file with no expressions is rejected. The parser reads the whole file and recovers at the next line after an error, so every bad line is reported. The REPL prints each line's parsed tree. Assignment and identifiers are not parsed yet. |
 | Lab 3 | Expressions now evaluate with `--eval`, and the REPL prints values. Values are numbers, strings, `active`/`inactive`, and `void`. `inactive` and `void` are false and everything else is true. `+` adds two numbers or joins two strings; arithmetic and comparison need numbers; equality works on any two values, and different types are never equal. `and` and `or` short-circuit. Division by zero is a runtime error. Runtime errors exit 70. Numbers print without a trailing `.0` and booleans print as `active` and `inactive`. |
 | Lab 4 | Programs run with plain `./run <file>`. `report <expression>` prints a value, and a bare expression is evaluated without printing. Simple statements end at a newline or a closing brace; blocks can span lines. `--parse` prints statements as trees, including `(block ...)`, and `--eval` and the REPL still print top-level expression values. `unit name = value` creates a binding and `unit name` holds `void`; names are read inside expressions. Assignment updates an existing binding, returns the assigned value, and associates right to left. Assigning to an undeclared name is a runtime error (exit 70), while assigning to a non-name is a syntax error (exit 65). Redeclaring a name rebinds it in the current scope. Blocks create lexical scopes, allow shadowing, and restore the outer environment even after a runtime error. Lookup and assignment reach the nearest binding; block locals expire when the block ends. Global bindings persist between REPL lines. Missing closing braces report a syntax error, recovery preserves block boundaries, and nesting beyond 128 blocks is rejected with exit 65. |
-| Lab 5 | `if`/`else` and `while` added. `if` runs only the branch its condition picks; `else` is optional, may start on the next line, and binds to the nearest `if`. `while` checks its condition before every pass, so it can run zero times. Both use the Lab 3 truthiness rule, and a block body gets its own scope. Missing parentheses or bodies are syntax errors (exit 65), and nesting beyond 128 `if`s or loops is rejected. |
+| Lab 5 | `if`/`else` and `while` added. `if` runs only the branch its condition picks; `else` is optional, may start on the next line, and binds to the nearest `if`. `while` checks its condition before every pass, so it can run zero times. Both use the Lab 3 truthiness rule, and a block body gets its own scope. Missing parentheses or bodies are syntax errors (exit 65), and nesting beyond 128 `if`s or loops is rejected. `for (initializer, condition, increment)` added with comma-separated, optional clauses; the parser rewrites it into a block and a `while`, so the loop variable is scoped to the loop and shared by every pass. Calls added: `callee(arguments)`, chainable as `f()()`, at most 255 arguments, on one line. Calling a non-callable value or passing the wrong number of arguments is a runtime error (exit 70). `clock()` is the first native function. |
