@@ -13,6 +13,8 @@ object Evaluator {
 
     fun execute(stmt: Stmt) {
         when (stmt) {
+            is Stmt.Protocol -> environment.define(stmt.name.lexeme, NierProtocol(stmt, environment))
+            is Stmt.Transmit -> throw Return(stmt.value?.let(::evaluate))
             is Stmt.If -> {
                 if (isTruthy(evaluate(stmt.condition))) execute(stmt.thenBranch)
                 else stmt.elseBranch?.let(::execute)
@@ -27,7 +29,7 @@ object Evaluator {
         }
     }
 
-    private fun executeBlock(statements: List<Stmt>, scope: Environment) {
+    fun executeBlock(statements: List<Stmt>, scope: Environment) {
         val previous = environment
         try {
             environment = scope

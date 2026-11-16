@@ -145,6 +145,8 @@ fun runPrompt() {
 }
 
 private fun statementLine(stmt: Stmt): Int = when (stmt) {
+    is Stmt.Protocol -> stmt.name.line
+    is Stmt.Transmit -> stmt.keyword.line
     is Stmt.If -> stmt.line
     is Stmt.While -> stmt.line
     is Stmt.Block -> stmt.line

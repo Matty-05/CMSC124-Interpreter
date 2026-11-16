@@ -1,5 +1,7 @@
 object AstPrinter {
     fun print(stmt: Stmt): String = when (stmt) {
+        is Stmt.Protocol -> "(protocol ${stmt.name.lexeme} (${stmt.parameters.joinToString(" ") { it.lexeme }}) ${print(stmt.body)})"
+        is Stmt.Transmit -> "(transmit${stmt.value?.let { " ${print(it)}" }.orEmpty()})"
         is Stmt.If -> "(if ${print(stmt.condition)} ${print(stmt.thenBranch)}${stmt.elseBranch?.let { " ${print(it)}" }.orEmpty()})"
         is Stmt.While -> "(while ${print(stmt.condition)} ${print(stmt.body)})"
         is Stmt.Block -> "(block${stmt.statements.joinToString("") { " ${print(it)}" }})"
