@@ -17,6 +17,7 @@ object AstPrinter {
             is Expr.Unary -> parenthesize(expr.operator.lexeme, expr.right)
             is Expr.Grouping -> parenthesize("group", expr.expression)
             is Expr.Variable -> expr.name.lexeme
+            is Expr.Call -> parenthesize("call", expr.callee, *expr.arguments.toTypedArray())
             is Expr.Assign -> "(= ${expr.name.lexeme} ${print(expr.value)})"
         }
     }

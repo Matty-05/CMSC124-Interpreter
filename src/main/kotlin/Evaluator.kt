@@ -1,6 +1,15 @@
 object Evaluator {
     // Current scope; the global environment persists between REPL lines.
-    private var environment = Environment()
+    val globals = Environment().apply {
+        // clock() → seconds since the Unix epoch, as a number
+        define("clock", object : NierCallable {
+            override fun arity(): Int = 0
+            override fun call(evaluator: Evaluator, arguments: List<Any?>): Any? =
+                System.currentTimeMillis() / 1000.0
+            override fun toString(): String = "<native clock>"
+        })
+    }
+    private var environment = globals
 
     fun execute(stmt: Stmt) {
         when (stmt) {
@@ -36,6 +45,16 @@ object Evaluator {
             val value = evaluate(expr.value)
             environment.assign(expr.name, value)
             value
+        }
+        is Expr.Call -> {
+            val callee = evaluate(expr.callee)
+            val arguments = expr.arguments.map(::evaluate)
+            // Checked here once, so protocols and natives share the same two errors.
+            if (callee !is NierCallable) throw RuntimeError(expr.paren, "Can only call protocols.")
+            if (arguments.size != callee.arity()) {
+                throw RuntimeError(expr.paren, "Expected ${callee.arity()} arguments but got ${arguments.size}.")
+            }
+            callee.call(this, arguments)
         }
         is Expr.Unary -> {
             val right = evaluate(expr.right)

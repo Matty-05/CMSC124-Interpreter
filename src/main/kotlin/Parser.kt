@@ -10,6 +10,7 @@ class Parser(private val tokens: List<Token>) {
         const val MAX_BLOCK_DEPTH = 128
         const val MAX_IF_DEPTH = 128
         const val MAX_WHILE_DEPTH = 128
+        const val MAX_ARGUMENTS = 255
     }
 
     // True at the end of the file, or when the next token is on a later line.
@@ -75,14 +76,37 @@ class Parser(private val tokens: List<Token>) {
         throw error(peek(), "Expect expression.")
     }
 
-    // unary → ( "not" | "-" ) unary | primary
+    // call → primary ( "(" arguments? ")" )*
+    // The loop lets a call's result be called again, as in f()().
+    private fun call(): Expr {
+        var expr = primary()
+        while (match(TokenType.LEFT_PAREN)) expr = finishCall(expr)
+        return expr
+    }
+
+    // arguments → expression ( "," expression )*
+    private fun finishCall(callee: Expr): Expr {
+        val arguments = mutableListOf<Expr>()
+        if (!check(TokenType.RIGHT_PAREN)) {
+            do {
+                if (arguments.size == MAX_ARGUMENTS) {
+                    throw error(peek(), "Can't have more than $MAX_ARGUMENTS arguments.")
+                }
+                arguments += expression()
+            } while (match(TokenType.COMMA))
+        }
+        val paren = consume(TokenType.RIGHT_PAREN, "Expect ')' after arguments.")
+        return Expr.Call(callee, paren, arguments)
+    }
+
+    // unary → ( "not" | "-" ) unary | call
     private fun unary(): Expr {
         if (match(TokenType.NOT, TokenType.MINUS)) {
             val operator = previous()
             val right = unary()
             return Expr.Unary(operator, right)
         }
-        return primary()
+        return call()
     }
 
     // factor → unary ( ( "/" | "*" ) unary )*
@@ -182,10 +206,11 @@ class Parser(private val tokens: List<Token>) {
         return Stmt.Unit(name, initializer)
     }
 
-    // statement → ifStmt | whileStmt | block | reportStmt | exprStmt
+    // statement → ifStmt | whileStmt | forStmt | block | reportStmt | exprStmt
     private fun statement(): Stmt {
         if (match(TokenType.IF)) return ifStmt()
         if (match(TokenType.WHILE)) return whileStmt()
+        if (match(TokenType.FOR)) return forStmt()
         if (match(TokenType.LEFT_BRACE)) {
             val line = previous().line
             if (blockDepth == MAX_BLOCK_DEPTH) {
@@ -244,6 +269,44 @@ class Parser(private val tokens: List<Token>) {
             consume(TokenType.RIGHT_PAREN, "Expect ')' after condition.")
             exprLine = peek().line
             return Stmt.While(condition, statement(), keyword.line)
+        } finally {
+            whileDepth--
+        }
+    }
+
+    // forStmt → "for" "(" ( unitDecl | expression )? "," expression? "," expression? ")" statement
+    // Nier has no ';', so commas separate the clauses. There is no for node: the loop is
+    // rewritten as { initializer  while (condition) { body  increment } }, so the
+    // evaluator runs it with the block and while code it already has.
+    private fun forStmt(): Stmt {
+        val keyword = previous()
+        if (whileDepth == MAX_WHILE_DEPTH) {
+            throw ParseError("[line ${keyword.line}] Error: Loop nested too deeply.")
+        }
+        whileDepth++
+        try {
+            consume(TokenType.LEFT_PAREN, "Expect '(' after 'for'.")
+            val initializer = when {
+                check(TokenType.COMMA) -> null
+                match(TokenType.UNIT) -> unitDecl()
+                else -> Stmt.Expression(expression())
+            }
+            consume(TokenType.COMMA, "Expect ',' after loop initializer.")
+            val condition = if (check(TokenType.COMMA)) null else expression()
+            consume(TokenType.COMMA, "Expect ',' after loop condition.")
+            val increment = if (check(TokenType.RIGHT_PAREN)) null else expression()
+            consume(TokenType.RIGHT_PAREN, "Expect ')' after for clauses.")
+            exprLine = peek().line
+
+            var body = statement()
+            if (increment != null) {
+                body = Stmt.Block(listOf(body, Stmt.Expression(increment)), keyword.line)
+            }
+            // A missing condition loops forever.
+            body = Stmt.While(condition ?: Expr.Literal(true), body, keyword.line)
+            // The outer block holds the loop variable, so it is gone after the loop.
+            if (initializer != null) body = Stmt.Block(listOf(initializer, body), keyword.line)
+            return body
         } finally {
             whileDepth--
         }
