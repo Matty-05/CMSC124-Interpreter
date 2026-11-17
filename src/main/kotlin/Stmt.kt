@@ -1,4 +1,6 @@
 sealed class Stmt {
+    class Protocol(val name: Token, val parameters: List<Token>, val body: Block) : Stmt()
+    class Transmit(val keyword: Token, val value: Expr?) : Stmt()
     class If(val condition: Expr, val thenBranch: Stmt, val elseBranch: Stmt?, val line: Int) : Stmt()
     // whileStmt -> "while" "(" expression ")" statement
     class While(val condition: Expr, val body: Stmt, val line: Int) : Stmt()

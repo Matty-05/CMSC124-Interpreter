@@ -5,12 +5,14 @@ class Parser(private val tokens: List<Token>) {
     private var blockDepth = 0
     private var ifDepth = 0
     private var whileDepth = 0
+    private var protocolDepth = 0
 
     private companion object {
         const val MAX_BLOCK_DEPTH = 128
         const val MAX_IF_DEPTH = 128
         const val MAX_WHILE_DEPTH = 128
         const val MAX_ARGUMENTS = 255
+        const val MAX_PARAMETERS = 255
     }
 
     // True at the end of the file, or when the next token is on a later line.
@@ -193,10 +195,40 @@ class Parser(private val tokens: List<Token>) {
     // expression → assignment
     private fun expression(): Expr = assignment()
 
-    // declaration → unitDecl | statement
+    // declaration → protocolDecl | unitDecl | statement
     private fun declaration(): Stmt {
+        if (match(TokenType.PROTOCOL)) return protocolDecl()
         if (match(TokenType.UNIT)) return unitDecl()
         return statement()
+    }
+
+    // protocolDecl → "protocol" IDENTIFIER "(" parameters? ")" block
+    private fun protocolDecl(): Stmt.Protocol {
+        val name = consume(TokenType.IDENTIFIER, "Expect protocol name.")
+        consume(TokenType.LEFT_PAREN, "Expect '(' after protocol name.")
+        val parameters = mutableListOf<Token>()
+        val parameterNames = mutableSetOf<String>()
+        if (!check(TokenType.RIGHT_PAREN)) {
+            do {
+                if (parameters.size == MAX_PARAMETERS) {
+                    throw error(peek(), "Can't have more than $MAX_PARAMETERS parameters.")
+                }
+                val parameter = consume(TokenType.IDENTIFIER, "Expect parameter name.")
+                if (!parameterNames.add(parameter.lexeme)) {
+                    throw error(parameter, "Duplicate parameter '${parameter.lexeme}'.")
+                }
+                parameters += parameter
+            } while (match(TokenType.COMMA))
+        }
+        consume(TokenType.RIGHT_PAREN, "Expect ')' after parameters.")
+        exprLine = peek().line
+        consume(TokenType.LEFT_BRACE, "Expect '{' before protocol body.")
+        protocolDepth++
+        try {
+            return Stmt.Protocol(name, parameters, block())
+        } finally {
+            protocolDepth--
+        }
     }
 
     // unitDecl → "unit" IDENTIFIER ( "=" expression )?
@@ -206,30 +238,42 @@ class Parser(private val tokens: List<Token>) {
         return Stmt.Unit(name, initializer)
     }
 
-    // statement → ifStmt | whileStmt | forStmt | block | reportStmt | exprStmt
+    // statement → transmitStmt | ifStmt | whileStmt | forStmt | block | reportStmt | exprStmt
     private fun statement(): Stmt {
+        if (match(TokenType.TRANSMIT)) return transmitStmt()
         if (match(TokenType.IF)) return ifStmt()
         if (match(TokenType.WHILE)) return whileStmt()
         if (match(TokenType.FOR)) return forStmt()
-        if (match(TokenType.LEFT_BRACE)) {
-            val line = previous().line
-            if (blockDepth == MAX_BLOCK_DEPTH) {
-                skipBlock()
-                throw ParseError("[line $line] Error: Block nested too deeply.")
-            }
-            blockDepth++
-            try {
-                return Stmt.Block(statements(inBlock = true), line)
-            } finally {
-                blockDepth--
-            }
-        }
+        if (match(TokenType.LEFT_BRACE)) return block()
         if (match(TokenType.REPORT)) return reportStmt()
         return Stmt.Expression(expression())
     }
 
+    // The opening brace is already consumed for either kind of block body.
+    private fun block(): Stmt.Block {
+        val line = previous().line
+        if (blockDepth == MAX_BLOCK_DEPTH) {
+            skipBlock()
+            throw ParseError("[line $line] Error: Block nested too deeply.")
+        }
+        blockDepth++
+        try {
+            return Stmt.Block(statements(inBlock = true), line)
+        } finally {
+            blockDepth--
+        }
+    }
+
     // reportStmt → "report" expression
     private fun reportStmt(): Stmt = Stmt.Report(expression())
+
+    // transmitStmt → "transmit" expression?
+    private fun transmitStmt(): Stmt.Transmit {
+        val keyword = previous()
+        if (protocolDepth == 0) throw error(keyword, "Can't transmit from outside a protocol.")
+        val value = if (atLineEnd() || check(TokenType.RIGHT_BRACE)) null else expression()
+        return Stmt.Transmit(keyword, value)
+    }
 
     // ifStmt → "if" "(" expression ")" statement ( "else" statement )?
     // Parsing the inner statement first binds else to the nearest unmatched if.

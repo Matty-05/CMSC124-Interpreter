@@ -171,13 +171,17 @@ committed `.expected` file is compared against this format byte for byte.
 
 ```
 program     → declaration* EOF ;
-declaration → unitDecl
+declaration → protocolDecl
+            | unitDecl
             | statement ;
+protocolDecl → "protocol" IDENTIFIER "(" parameters? ")" block ;
+parameters  → IDENTIFIER ( "," IDENTIFIER )* ;
 unitDecl    → "unit" IDENTIFIER ( "=" expression )? ;
 statement   → ifStmt
             | whileStmt
             | forStmt
             | block
+            | transmitStmt
             | reportStmt
             | exprStmt ;
 ifStmt      → "if" "(" expression ")" statement ( "else" statement )? ;
@@ -186,6 +190,7 @@ forStmt     → "for" "(" ( unitDecl | expression )? ","
               expression? "," expression? ")" statement ;
 block       → "{" declaration* "}" ;
 reportStmt  → "report" expression ;
+transmitStmt → "transmit" expression? ;
 exprStmt    → expression ;
 expression  → assignment ;
 assignment  → IDENTIFIER "=" assignment
@@ -210,13 +215,24 @@ can span lines. Inside and outside blocks, a token on a later line marks the end
 of a simple statement, since the scanner does not emit newline tokens. A closing
 brace also ends the last statement inside its block.
 
-A declaration is either a `unit` declaration or a statement. `unit name =
-<expression>` creates a binding named `name` holding the expression's value;
+A declaration is a `protocol` declaration, a `unit` declaration, or a statement.
+`unit name = <expression>` creates a binding named `name` holding the expression's value;
 `unit name` alone holds `void`. A name on its own inside an expression reads
 the value bound to it.
 
-A statement is an `if` statement, a `while` loop, a block, a `report`
-statement, or an expression statement.
+`protocol add(a, b) { transmit a + b }` defines a callable in the current
+scope. Its body must be a block; the opening brace can start on the next line.
+The name and parameter list stay on one line, with at most 255 parameters.
+Parameter names must be unique within a protocol; a duplicate reports
+`Duplicate parameter 'a'.` (exit 65). Separate protocols may reuse names.
+`transmit value` exits the current protocol with that value, including from
+inside nested blocks, conditionals, and loops. A bare `transmit` or reaching
+the end of the body produces `void`. A transmit expression stays on its line;
+`transmit` outside a protocol is rejected before execution with
+`Can't transmit from outside a protocol.` (exit 65).
+
+A statement is an `if` statement, a `while` or `for` loop, a block, a
+`transmit` statement, a `report` statement, or an expression statement.
 A block holds declarations between `{` and `}` and runs them in a new scope.
 `if (condition) statement else statement` runs only the branch the condition
 picks, using the truthiness rule from Lab 3; the `else` part is optional and may
@@ -325,6 +341,8 @@ prefix form, wrapped in parentheses.
   outer block.
 - Calls print as: `(call callee argument ...)`, e.g. `add(1, 2)` prints
   `(call add 1.0 2.0)` and `clock()` prints `(call clock)`
+- Protocols print as `(protocol add (a b) (block ...))`; a transmit prints
+  as `(transmit value)` or `(transmit)` when no value is given.
 - Expression statements print as: the expression's tree, as in Lab 2
 - `report` statements print as: `(report expression)`, e.g.
   `report 1 + 2` prints `(report (+ 1.0 2.0))`
@@ -425,7 +443,9 @@ with code 70. The messages are:
 
 ### Scope and bindings
 
-- Creating a binding: `unit name = <expression>`. Only `unit` creates a name.
+- Creating a binding: `unit name = <expression>` binds a value, and
+  `protocol name(parameters) { ... }` binds a protocol in the current scope.
+  Parameters are bound in a fresh environment for each call.
 - Redeclaration in the same scope: allowed. `unit x = 1` then `unit x = 2`
   rebinds `x` to `2`, so retyping a declaration in the REPL is not an error.
 - Uninitialized variable holds: `void`, so `unit x` then `report x` prints
@@ -445,10 +465,12 @@ with code 70. The messages are:
   and hides the outer one; the outer `x` is unchanged and visible again once
   the block ends. Assignment (`x = 2`) never creates a binding: it changes the
   nearest existing `x`, which may be in an outer scope.
-- Storage lifetime: a block's units live until the block ends, then they are
-  gone. Global units last until the program ends, and the REPL keeps them
-  between lines, so `unit x = 1` on one line and `report x` on the next prints
-  `1`.
+- Storage lifetime: leaving a block restores the outer scope, making the
+  block's locals inaccessible through ordinary lookup. A returned protocol can
+  retain that environment and access its captured bindings after the block or
+  defining call ends. Global units last until the program ends, and the REPL
+  keeps them between lines, so `unit x = 1` on one line and `report x` on the
+  next prints `1`.
 - Undefined name: runtime error with exit 70, `[line N] Runtime error:
   Undefined variable 'x'.` Lookup happens while the program runs, so which
   names exist is only known then.
@@ -473,7 +495,18 @@ with code 70. The messages are:
 - Calling: the callee and then the arguments are evaluated left to right,
   before any check. Only a callable value can be called; anything else, such as
   `5()` or `"text"()`, is the runtime error `Can only call protocols.`
-- Function with no return statement produces: [value]
+- Protocol results: `transmit value` returns the evaluated value; a bare
+  `transmit` or falling off the end returns `void`. The return signal unwinds
+  nested blocks and loops and is caught only by the called protocol. The
+  surrounding environment is restored on a return or an error.
+- Protocol scope and capture: lexical. A protocol saves the environment in
+  which its declaration executes. A call creates a fresh environment enclosing
+  that saved environment, not the caller's, and binds its parameters there.
+  Captures retain live bindings, not copies of their values. Calls from the
+  same returned counter share its state; separate factory calls have separate
+  state. Protocols can be passed as arguments and returned as results, and
+  print as `<protocol name>`. Recursion and mutual recursion work once the
+  required declarations have executed.
 - Arity mismatch: a runtime error with exit 70, `Expected 2 arguments but got
   1.` The count must match exactly; extra arguments are not dropped and missing
   ones are not filled with `void`, since a wrong count is almost always a
@@ -735,13 +768,21 @@ loops/         three passes, zero passes, a single-statement body, a sum,
                condition, and a fresh body scope on each pass; for-*: three
                passes, zero passes, a single-statement body, left-out
                clauses, nesting, and shadowing an outer unit
-calls/         clock() called, compared, printed, and copied to another unit
+calls/         clock() called, compared, printed, and copied to another unit;
+               protocols with zero and several arguments, void results,
+               lexical lookup, nested transmit, recursion, independent
+               captured counters, shared loop captures, retained block locals,
+               higher-order calls, fresh parameters, block-local declarations,
+               and the 255-parameter boundary
 errors/        missing parentheses, conditions and branches for if and while,
                runtime errors in a condition, expired branch and loop locals,
                and excessive nesting; for with a missing parenthesis, comma or
                body and its expired loop unit; calling a number, a string, a
                call's result or an undefined name; clock(1); an unclosed or
-               256-argument call; and a ( on the line after its callee
+               256-argument call; and a ( on the line after its callee;
+               protocol arity mismatches, a missing or unclosed protocol
+               body, malformed or excessive parameters, expired protocol
+               names, and transmit outside a protocol
 ```
 
 ## Sample code
@@ -822,6 +863,10 @@ Nier already ends statements with a newline instead of a semicolon, so we made `
 
 ## Known limitations
 
+- Protocol calls use the JVM call stack; there is no tail-call optimization.
+  Excessive recursion reports `Stack overflow: protocol calls nested too deeply.`
+  as a runtime error (exit 70 in file mode). The available depth depends on the
+  JVM stack size and the code being evaluated; the REPL returns to its prompt.
 - Blocks may nest at most 128 levels. Deeper blocks produce
   `Block nested too deeply.` with exit code 65.
 - The REPL reads one line at a time. Use a file for multiline blocks; a complete
@@ -865,4 +910,5 @@ Nier already ends statements with a newline instead of a semicolon, so we made `
 | Lab 2 | Expression grammar added, loosest to tightest: `or`, `and`, `== !=`, `< <= > >=`, `+ -`, `* /`, then prefix `not` and `-`, then literals and parenthesized groups. Every binary operator is left-associative. `--parse` prints one prefix-form tree per line. One expression per line, and an expression cannot span lines. A file with no expressions is rejected. The parser reads the whole file and recovers at the next line after an error, so every bad line is reported. The REPL prints each line's parsed tree. Assignment and identifiers are not parsed yet. |
 | Lab 3 | Expressions now evaluate with `--eval`, and the REPL prints values. Values are numbers, strings, `active`/`inactive`, and `void`. `inactive` and `void` are false and everything else is true. `+` adds two numbers or joins two strings; arithmetic and comparison need numbers; equality works on any two values, and different types are never equal. `and` and `or` short-circuit. Division by zero is a runtime error. Runtime errors exit 70. Numbers print without a trailing `.0` and booleans print as `active` and `inactive`. |
 | Lab 4 | Programs run with plain `./run <file>`. `report <expression>` prints a value, and a bare expression is evaluated without printing. Simple statements end at a newline or a closing brace; blocks can span lines. `--parse` prints statements as trees, including `(block ...)`, and `--eval` and the REPL still print top-level expression values. `unit name = value` creates a binding and `unit name` holds `void`; names are read inside expressions. Assignment updates an existing binding, returns the assigned value, and associates right to left. Assigning to an undeclared name is a runtime error (exit 70), while assigning to a non-name is a syntax error (exit 65). Redeclaring a name rebinds it in the current scope. Blocks create lexical scopes, allow shadowing, and restore the outer environment even after a runtime error. Lookup and assignment reach the nearest binding; block locals expire when the block ends. Global bindings persist between REPL lines. Missing closing braces report a syntax error, recovery preserves block boundaries, and nesting beyond 128 blocks is rejected with exit 65. |
-| Lab 5 | `if`/`else` and `while` added. `if` runs only the branch its condition picks; `else` is optional, may start on the next line, and binds to the nearest `if`. `while` checks its condition before every pass, so it can run zero times. Both use the Lab 3 truthiness rule, and a block body gets its own scope. Missing parentheses or bodies are syntax errors (exit 65), and nesting beyond 128 `if`s or loops is rejected. `for (initializer, condition, increment)` added with comma-separated, optional clauses; the parser rewrites it into a block and a `while`, so the loop variable is scoped to the loop and shared by every pass. Calls added: `callee(arguments)`, chainable as `f()()`, at most 255 arguments, on one line. Calling a non-callable value or passing the wrong number of arguments is a runtime error (exit 70). `clock()` is the first native function. |
+| Lab 5 | `if`/`else` and `while` added. `if` runs only the branch its condition picks; `else` is optional, may start on the next line, and binds to the nearest `if`. `while` checks its condition before every pass, so it can run zero times. Both use the Lab 3 truthiness rule, and a block body gets its own scope. Missing parentheses or bodies are syntax errors (exit 65), and nesting beyond 128 `if`s or loops is rejected. `for (initializer, condition, increment)` added with comma-separated, optional clauses; the parser rewrites it into a block and a `while`, so the loop variable is scoped to the loop and shared by every pass. Calls added: `callee(arguments)`, chainable as `f()()`, at most 255 arguments, on one line. Calling a non-callable value or passing the wrong number of arguments is a runtime error (exit 70). `clock()` is the first native function. Protocol declarations and transmit added, with lexical environment capture, fresh parameter bindings per call, void results for bare or missing transmit, a 255-parameter limit, and escaping closures with independent state. Transmit outside a protocol is rejected before execution (exit 65). |
+
