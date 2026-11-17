@@ -2,11 +2,6 @@ class Parser(private val tokens: List<Token>) {
     private var current = 0
     private var exprLine = 0   // the line of the expression being parsed
     private val errors = mutableListOf<String>()
-    private var blockDepth = 0
-
-    private companion object {
-        const val MAX_BLOCK_DEPTH = 128
-    }
 
     // True at the end of the file, or when the next token is on a later line.
     private fun atLineEnd(): Boolean = isAtEnd() || peek().line != exprLine
@@ -182,16 +177,7 @@ class Parser(private val tokens: List<Token>) {
     private fun statement(): Stmt {
         if (match(TokenType.LEFT_BRACE)) {
             val line = previous().line
-            if (blockDepth == MAX_BLOCK_DEPTH) {
-                skipBlock()
-                throw ParseError("[line $line] Error: Block nested too deeply.")
-            }
-            blockDepth++
-            try {
-                return Stmt.Block(statements(inBlock = true), line)
-            } finally {
-                blockDepth--
-            }
+            return Stmt.Block(statements(inBlock = true), line)
         }
         if (match(TokenType.REPORT)) return reportStmt()
         return Stmt.Expression(expression())
@@ -200,17 +186,20 @@ class Parser(private val tokens: List<Token>) {
     // reportStmt → "report" expression
     private fun reportStmt(): Stmt = Stmt.Report(expression())
 
-    // The opening brace was consumed. Skip its contents without growing the stack.
-    private fun skipBlock() {
-        var remaining = 1
-        while (!isAtEnd() && remaining > 0) {
+    // After a stack overflow, skip the whole statement from its first token, matching
+    // braces and parentheses in a loop so skipping does not use the stack again.
+    private fun skipNested(start: Int) {
+        current = start
+        var open = 0
+        while (!isAtEnd()) {
             when (advance().type) {
-                TokenType.LEFT_BRACE -> remaining++
-                TokenType.RIGHT_BRACE -> remaining--
+                TokenType.LEFT_BRACE, TokenType.LEFT_PAREN -> open++
+                TokenType.RIGHT_BRACE, TokenType.RIGHT_PAREN -> open--
                 else -> Unit
             }
+            exprLine = previous().line
+            if (open <= 0 && atLineEnd()) break
         }
-        exprLine = previous().line
     }
 
     // program → declaration* EOF, one declaration per line
@@ -226,15 +215,20 @@ class Parser(private val tokens: List<Token>) {
         val statements = mutableListOf<Stmt>()
         while (!isAtEnd() && !(inBlock && peek().type == TokenType.RIGHT_BRACE)) {
             exprLine = peek().line
+            val start = current
             try {
                 val stmt = declaration()
                 if (!atLineEnd() && !(inBlock && peek().type == TokenType.RIGHT_BRACE)) {
                     throw error(peek(), "Expect end of statement.")
                 }
                 statements += stmt
-            } catch (_: StackOverflowError) {
-                errors += "[line $exprLine] Error: Expression nested too deeply."
-                synchronize(inBlock)
+            } catch (e: StackOverflowError) {
+                // The JVM ran out of stack, so the limit depends on the machine. Only the
+                // top-level loop handles it: by then the stack has unwound and recovery is safe.
+                if (inBlock) throw e
+                val what = if (previous().type == TokenType.LEFT_BRACE) "Block" else "Expression"
+                errors += "[line ${tokens[start].line}] Error: $what nested too deeply."
+                skipNested(start)
             } catch (e: ParseError) {
                 errors += e.message.orEmpty()
                 synchronize(inBlock)
