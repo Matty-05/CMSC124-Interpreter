@@ -2,15 +2,9 @@ class Parser(private val tokens: List<Token>) {
     private var current = 0
     private var exprLine = 0   // the line of the expression being parsed
     private val errors = mutableListOf<String>()
-    private var blockDepth = 0
-    private var ifDepth = 0
-    private var whileDepth = 0
     private var protocolDepth = 0
 
     private companion object {
-        const val MAX_BLOCK_DEPTH = 128
-        const val MAX_IF_DEPTH = 128
-        const val MAX_WHILE_DEPTH = 128
         const val MAX_ARGUMENTS = 255
         const val MAX_PARAMETERS = 255
     }
@@ -252,16 +246,7 @@ class Parser(private val tokens: List<Token>) {
     // The opening brace is already consumed for either kind of block body.
     private fun block(): Stmt.Block {
         val line = previous().line
-        if (blockDepth == MAX_BLOCK_DEPTH) {
-            skipBlock()
-            throw ParseError("[line $line] Error: Block nested too deeply.")
-        }
-        blockDepth++
-        try {
-            return Stmt.Block(statements(inBlock = true), line)
-        } finally {
-            blockDepth--
-        }
+        return Stmt.Block(statements(inBlock = true), line)
     }
 
     // reportStmt → "report" expression
@@ -279,43 +264,27 @@ class Parser(private val tokens: List<Token>) {
     // Parsing the inner statement first binds else to the nearest unmatched if.
     private fun ifStmt(): Stmt {
         val keyword = previous()
-        if (ifDepth == MAX_IF_DEPTH) {
-            throw ParseError("[line ${keyword.line}] Error: Conditional nested too deeply.")
-        }
-        ifDepth++
-        try {
-            consume(TokenType.LEFT_PAREN, "Expect '(' after 'if'.")
-            val condition = expression()
-            consume(TokenType.RIGHT_PAREN, "Expect ')' after condition.")
+        consume(TokenType.LEFT_PAREN, "Expect '(' after 'if'.")
+        val condition = expression()
+        consume(TokenType.RIGHT_PAREN, "Expect ')' after condition.")
+        exprLine = peek().line
+        val thenBranch = statement()
+        val elseBranch = if (peek().type == TokenType.ELSE) {
+            advance()
             exprLine = peek().line
-            val thenBranch = statement()
-            val elseBranch = if (peek().type == TokenType.ELSE) {
-                advance()
-                exprLine = peek().line
-                statement()
-            } else null
-            return Stmt.If(condition, thenBranch, elseBranch, keyword.line)
-        } finally {
-            ifDepth--
-        }
+            statement()
+        } else null
+        return Stmt.If(condition, thenBranch, elseBranch, keyword.line)
     }
 
     // whileStmt → "while" "(" expression ")" statement
     private fun whileStmt(): Stmt {
         val keyword = previous()
-        if (whileDepth == MAX_WHILE_DEPTH) {
-            throw ParseError("[line ${keyword.line}] Error: Loop nested too deeply.")
-        }
-        whileDepth++
-        try {
-            consume(TokenType.LEFT_PAREN, "Expect '(' after 'while'.")
-            val condition = expression()
-            consume(TokenType.RIGHT_PAREN, "Expect ')' after condition.")
-            exprLine = peek().line
-            return Stmt.While(condition, statement(), keyword.line)
-        } finally {
-            whileDepth--
-        }
+        consume(TokenType.LEFT_PAREN, "Expect '(' after 'while'.")
+        val condition = expression()
+        consume(TokenType.RIGHT_PAREN, "Expect ')' after condition.")
+        exprLine = peek().line
+        return Stmt.While(condition, statement(), keyword.line)
     }
 
     // forStmt → "for" "(" ( unitDecl | expression )? "," expression? "," expression? ")" statement
@@ -324,49 +293,44 @@ class Parser(private val tokens: List<Token>) {
     // evaluator runs it with the block and while code it already has.
     private fun forStmt(): Stmt {
         val keyword = previous()
-        if (whileDepth == MAX_WHILE_DEPTH) {
-            throw ParseError("[line ${keyword.line}] Error: Loop nested too deeply.")
+        consume(TokenType.LEFT_PAREN, "Expect '(' after 'for'.")
+        val initializer = when {
+            check(TokenType.COMMA) -> null
+            match(TokenType.UNIT) -> unitDecl()
+            else -> Stmt.Expression(expression())
         }
-        whileDepth++
-        try {
-            consume(TokenType.LEFT_PAREN, "Expect '(' after 'for'.")
-            val initializer = when {
-                check(TokenType.COMMA) -> null
-                match(TokenType.UNIT) -> unitDecl()
-                else -> Stmt.Expression(expression())
-            }
-            consume(TokenType.COMMA, "Expect ',' after loop initializer.")
-            val condition = if (check(TokenType.COMMA)) null else expression()
-            consume(TokenType.COMMA, "Expect ',' after loop condition.")
-            val increment = if (check(TokenType.RIGHT_PAREN)) null else expression()
-            consume(TokenType.RIGHT_PAREN, "Expect ')' after for clauses.")
-            exprLine = peek().line
+        consume(TokenType.COMMA, "Expect ',' after loop initializer.")
+        val condition = if (check(TokenType.COMMA)) null else expression()
+        consume(TokenType.COMMA, "Expect ',' after loop condition.")
+        val increment = if (check(TokenType.RIGHT_PAREN)) null else expression()
+        consume(TokenType.RIGHT_PAREN, "Expect ')' after for clauses.")
+        exprLine = peek().line
 
-            var body = statement()
-            if (increment != null) {
-                body = Stmt.Block(listOf(body, Stmt.Expression(increment)), keyword.line)
-            }
-            // A missing condition loops forever.
-            body = Stmt.While(condition ?: Expr.Literal(true), body, keyword.line)
-            // The outer block holds the loop variable, so it is gone after the loop.
-            if (initializer != null) body = Stmt.Block(listOf(initializer, body), keyword.line)
-            return body
-        } finally {
-            whileDepth--
+        var body = statement()
+        if (increment != null) {
+            body = Stmt.Block(listOf(body, Stmt.Expression(increment)), keyword.line)
         }
+        // A missing condition loops forever.
+        body = Stmt.While(condition ?: Expr.Literal(true), body, keyword.line)
+        // The outer block holds the loop variable, so it is gone after the loop.
+        if (initializer != null) body = Stmt.Block(listOf(initializer, body), keyword.line)
+        return body
     }
 
-    // The opening brace was consumed. Skip its contents without growing the stack.
-    private fun skipBlock() {
-        var remaining = 1
-        while (!isAtEnd() && remaining > 0) {
+    // After a stack overflow, skip the whole statement from its first token, matching
+    // braces and parentheses in a loop so skipping does not use the stack again.
+    private fun skipNested(start: Int) {
+        current = start
+        var open = 0
+        while (!isAtEnd()) {
             when (advance().type) {
-                TokenType.LEFT_BRACE -> remaining++
-                TokenType.RIGHT_BRACE -> remaining--
+                TokenType.LEFT_BRACE, TokenType.LEFT_PAREN -> open++
+                TokenType.RIGHT_BRACE, TokenType.RIGHT_PAREN -> open--
                 else -> Unit
             }
+            exprLine = previous().line
+            if (open <= 0 && atLineEnd()) break
         }
-        exprLine = previous().line
     }
 
     // program → declaration* EOF, one declaration per line
@@ -382,15 +346,19 @@ class Parser(private val tokens: List<Token>) {
         val statements = mutableListOf<Stmt>()
         while (!isAtEnd() && !(inBlock && peek().type == TokenType.RIGHT_BRACE)) {
             exprLine = peek().line
+            val start = current
             try {
                 val stmt = declaration()
                 if (!atLineEnd() && !(inBlock && peek().type == TokenType.RIGHT_BRACE)) {
                     throw error(peek(), "Expect end of statement.")
                 }
                 statements += stmt
-            } catch (_: StackOverflowError) {
-                errors += "[line $exprLine] Error: Expression nested too deeply."
-                synchronize(inBlock)
+            } catch (e: StackOverflowError) {
+                // The JVM ran out of stack, so the limit depends on the machine. Only the
+                // top-level loop handles it: by then the stack has unwound and recovery is safe.
+                if (inBlock) throw e
+                errors += "[line ${tokens[start].line}] Error: ${nestedKind(tokens[start])} nested too deeply."
+                skipNested(start)
             } catch (e: ParseError) {
                 errors += e.message.orEmpty()
                 synchronize(inBlock)
@@ -401,6 +369,15 @@ class Parser(private val tokens: List<Token>) {
             exprLine = advance().line
         }
         return statements
+    }
+
+    // Named after the statement's first token, so the message is the same on every run
+    // no matter where the stack happened to run out.
+    private fun nestedKind(first: Token): String = when (first.type) {
+        TokenType.LEFT_BRACE, TokenType.PROTOCOL -> "Block"
+        TokenType.IF -> "Conditional"
+        TokenType.WHILE, TokenType.FOR -> "Loop"
+        else -> "Expression"
     }
 
     // Skip the bad line, preserving a closing brace for its block.
