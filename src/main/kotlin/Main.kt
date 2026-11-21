@@ -152,6 +152,7 @@ private fun statementLine(stmt: Stmt): Int = when (stmt) {
     is Stmt.Block -> stmt.line
     is Stmt.Expression -> expressionLine(stmt.expression)
     is Stmt.Report -> expressionLine(stmt.expression)
+    is Stmt.Hack -> stmt.keyword.line
     is Stmt.Unit -> stmt.name.line
 }
 

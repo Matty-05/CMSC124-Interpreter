@@ -7,6 +7,7 @@ object AstPrinter {
         is Stmt.Block -> "(block${stmt.statements.joinToString("") { " ${print(it)}" }})"
         is Stmt.Expression -> print(stmt.expression)
         is Stmt.Report -> "(report ${print(stmt.expression)})"
+        is Stmt.Hack -> "(hack ${print(stmt.expression)})"
         is Stmt.Unit -> stmt.initializer?.let { "(unit ${stmt.name.lexeme} ${print(it)})" } ?: "(unit ${stmt.name.lexeme})"
     }
 

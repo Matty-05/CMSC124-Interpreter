@@ -232,7 +232,7 @@ class Parser(private val tokens: List<Token>) {
         return Stmt.Unit(name, initializer)
     }
 
-    // statement → transmitStmt | ifStmt | whileStmt | forStmt | block | reportStmt | exprStmt
+    // statement → transmitStmt | ifStmt | whileStmt | forStmt | block | reportStmt | hackStmt | exprStmt
     private fun statement(): Stmt {
         if (match(TokenType.TRANSMIT)) return transmitStmt()
         if (match(TokenType.IF)) return ifStmt()
@@ -240,6 +240,7 @@ class Parser(private val tokens: List<Token>) {
         if (match(TokenType.FOR)) return forStmt()
         if (match(TokenType.LEFT_BRACE)) return block()
         if (match(TokenType.REPORT)) return reportStmt()
+        if (match(TokenType.HACK)) return hackStmt()
         return Stmt.Expression(expression())
     }
 
@@ -251,6 +252,9 @@ class Parser(private val tokens: List<Token>) {
 
     // reportStmt → "report" expression
     private fun reportStmt(): Stmt = Stmt.Report(expression())
+
+    // hackStmt → "hack" expression
+    private fun hackStmt(): Stmt = Stmt.Hack(previous(), expression())
 
     // transmitStmt → "transmit" expression?
     private fun transmitStmt(): Stmt.Transmit {
