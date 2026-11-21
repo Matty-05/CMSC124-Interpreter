@@ -10,6 +10,8 @@ object Evaluator {
         })
     }
     private var environment = globals
+    // True while the outermost call is running, so only that call handles a stack overflow.
+    private var callActive = false
 
     fun execute(stmt: Stmt) {
         when (stmt) {
@@ -56,7 +58,17 @@ object Evaluator {
             if (arguments.size != callee.arity()) {
                 throw RuntimeError(expr.paren, "Expected ${callee.arity()} arguments but got ${arguments.size}.")
             }
-            callee.call(this, arguments)
+            if (callActive) callee.call(this, arguments)
+            else try {
+                callActive = true
+                callee.call(this, arguments)
+            } catch (_: StackOverflowError) {
+                // By now the stack has unwound to the outermost call, so the error points at
+                // the line that started the recursion, not where the protocol was declared.
+                throw RuntimeError(expr.paren, "Stack overflow: protocol calls nested too deeply.")
+            } finally {
+                callActive = false
+            }
         }
         is Expr.Unary -> {
             val right = evaluate(expr.right)
