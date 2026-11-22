@@ -26,6 +26,7 @@ object Evaluator {
             is Stmt.Block -> executeBlock(stmt.statements, Environment(environment))
             is Stmt.Expression -> evaluate(stmt.expression)
             is Stmt.Report -> println(stringify(evaluate(stmt.expression)))
+            is Stmt.Hack -> Hack.run(stmt.expression)
             // A unit with no value holds void.
             is Stmt.Unit -> environment.define(stmt.name.lexeme, stmt.initializer?.let { evaluate(it) })
         }
@@ -129,7 +130,7 @@ object Evaluator {
         throw RuntimeError(operator, "Operands must be numbers.")
     }
 
-    private fun isTruthy(value: Any?): Boolean = value != null && value != false
+    fun isTruthy(value: Any?): Boolean = value != null && value != false
 
     fun stringify(value: Any?): String = when (value) {
         null -> "void"

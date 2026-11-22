@@ -18,7 +18,7 @@ enum class TokenType {
     ACTIVE, INACTIVE, VOID,
     IF, ELSE, WHILE, FOR,
     AND, OR, NOT,
-    SCAN,
+    SCAN, ACCESS_POINT, RESTORE, HACK,
 
     EOF
 }

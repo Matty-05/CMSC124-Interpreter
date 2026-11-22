@@ -53,6 +53,9 @@ Exit codes: 0 when the file scans (and, with `--parse`, parses) cleanly, 65 when
 | `or` | Logical disjunction |
 | `not` | Logical negation |
 | `scan` | Prints a variable's name and value together |
+| `access_point` | Saves every unit's value under a name (niche; parsing and behavior still to come) |
+| `restore` | Puts the values saved by an `access_point` back (niche; parsing and behavior still to come) |
+| `hack` | Shows how an expression got its result, step by step (niche) |
 
 Every word here is a word a user cannot use as a variable name, so the list is
 kept deliberately small. Keywords are reserved in all contexts.
@@ -183,6 +186,7 @@ statement   → ifStmt
             | block
             | transmitStmt
             | reportStmt
+            | hackStmt
             | exprStmt ;
 ifStmt      → "if" "(" expression ")" statement ( "else" statement )? ;
 whileStmt   → "while" "(" expression ")" statement ;
@@ -190,6 +194,7 @@ forStmt     → "for" "(" ( unitDecl | expression )? ","
               expression? "," expression? ")" statement ;
 block       → "{" declaration* "}" ;
 reportStmt  → "report" expression ;
+hackStmt    → "hack" expression ;
 transmitStmt → "transmit" expression? ;
 exprStmt    → expression ;
 expression  → assignment ;
@@ -232,7 +237,8 @@ the end of the body produces `void`. A transmit expression stays on its line;
 `Can't transmit from outside a protocol.` (exit 65).
 
 A statement is an `if` statement, a `while` or `for` loop, a block, a
-`transmit` statement, a `report` statement, or an expression statement.
+`transmit` statement, a `report` statement, a `hack` statement, or an
+expression statement.
 A block holds declarations between `{` and `}` and runs them in a new scope.
 `if (condition) statement else statement` runs only the branch the condition
 picks, using the truthiness rule from Lab 3; the `else` part is optional and may
@@ -346,6 +352,8 @@ prefix form, wrapped in parentheses.
 - Expression statements print as: the expression's tree, as in Lab 2
 - `report` statements print as: `(report expression)`, e.g.
   `report 1 + 2` prints `(report (+ 1.0 2.0))`
+- `hack` statements print as: `(hack expression)`, e.g. `hack 1 + 2` prints
+  `(hack (+ 1.0 2.0))`
 - `unit` declarations print as: `(unit name value)`, or `(unit name)` with no
   value, e.g. `unit hp = 100` prints `(unit hp 100.0)`
 - Names print as: the name itself, e.g. `hp`
@@ -511,6 +519,59 @@ with code 70. The messages are:
   1.` The count must match exactly; extra arguments are not dropped and missing
   ones are not filled with `void`, since a wrong count is almost always a
   mistake. The check happens in one place for protocols and native functions.
+
+## Pod tools (niche)
+
+Nier's niche is showing how a protocol got its result. These tools print in
+the `[Pod 042]` style; ordinary errors keep the `[line N] Runtime error:` form.
+
+### hack
+
+`hack expression` evaluates the expression and prints how it got the result:
+
+```
+unit hp = 40
+unit dmg = 15
+hack hp - dmg * 2 > 0
+```
+
+```
+[Pod 042] Hack: hp - dmg * 2 > 0
+Grouping: (> (- hp (* dmg 2.0)) 0.0)
+Steps:
+1. dmg * 2 -> 15 * 2 = 30
+2. hp - 30 -> 40 - 30 = 10
+3. 10 > 0 = active
+Result: active
+```
+
+- `Hack:` is the expression written back out; `Grouping:` is its `--parse`
+  tree, so it shows which operator binds tighter. One difference from
+  `--parse`: strings are shown quoted (see below).
+- Steps run innermost first. Each one shows the operation as written, then
+  `->` and the same operation with names replaced by their values (left out
+  when there are no names), then `=` and the result. A finished step's result
+  replaces it in the next step.
+- Strings in the `Hack:`, `Grouping:` and step lines are written back as Nier
+  string literals, quoted and with `\"`, `\\`, `\n` and `\t` escaped again, so
+  `hack "a\"b" + "!"` shows `"a\"b" + "!"` and a newline inside a string
+  cannot split a line. `Result:` prints the value the way `report` does.
+- Each operation is passed back to the evaluator with its operands already
+  computed, so `hack` follows the same rules and raises the same errors as
+  normal evaluation. A runtime error prints the steps that worked, then the
+  usual error (exit 70).
+- `and`/`or` still short-circuit: the step says `(right side skipped)` and the
+  right side never runs.
+- A call is one step, such as `double(hp) -> double(30) = 60`. The protocol
+  body runs normally and is not traced, so anything it reports prints before
+  `Steps:`.
+- An assignment step shows the change: `hp = 30 (hp was 40, now 30)`, and the
+  new value stays after the `hack`.
+- A lone value has nothing to compute and prints `Steps: none`. A step that
+  only repeats its result, like `-5 = -5`, is left out.
+- `hack` is a statement, so it works in blocks, loops and protocols, and in
+  the REPL. Like `report`, its expression starts on the same line.
+- Step lines have no indent because the test harness strips expected lines.
 
 ## Native functions
 
@@ -754,6 +815,7 @@ python3 run_tests.py tests/lab2
 python3 run_tests.py tests/lab3
 python3 run_tests.py tests/lab4
 python3 run_tests.py tests/lab5
+python3 run_tests.py tests/niche
 ```
 
 Lab 5 tests are inline and run with plain `./run`, like Lab 4. A loop that
@@ -786,6 +848,18 @@ errors/        missing parentheses, conditions and branches for if and while,
                body, malformed or excessive parameters, expired protocol
                names, transmit outside a protocol, and a protocol stack
                overflow reported on the line of the call
+```
+
+The niche tools have their own `tests/niche` folder, inline like Lab 5:
+
+```
+hack/          steps with names, grouping by parentheses, short-circuiting,
+               a lone value, not, a call whose body reports, an assignment,
+               strings, escaped quotes, newlines, tabs and backslashes, and
+               hack inside a loop
+errors/        a runtime error after some steps, an undefined first operand,
+               a missing expression or one on the next line, and the new
+               keywords used as unit names
 ```
 
 ## Sample code
@@ -920,5 +994,5 @@ Nier already ends statements with a newline instead of a semicolon, so we made `
 | Lab 2 | Expression grammar added, loosest to tightest: `or`, `and`, `== !=`, `< <= > >=`, `+ -`, `* /`, then prefix `not` and `-`, then literals and parenthesized groups. Every binary operator is left-associative. `--parse` prints one prefix-form tree per line. One expression per line, and an expression cannot span lines. A file with no expressions is rejected. The parser reads the whole file and recovers at the next line after an error, so every bad line is reported. The REPL prints each line's parsed tree. Assignment and identifiers are not parsed yet. |
 | Lab 3 | Expressions now evaluate with `--eval`, and the REPL prints values. Values are numbers, strings, `active`/`inactive`, and `void`. `inactive` and `void` are false and everything else is true. `+` adds two numbers or joins two strings; arithmetic and comparison need numbers; equality works on any two values, and different types are never equal. `and` and `or` short-circuit. Division by zero is a runtime error. Runtime errors exit 70. Numbers print without a trailing `.0` and booleans print as `active` and `inactive`. |
 | Lab 4 | Programs run with plain `./run <file>`. `report <expression>` prints a value, and a bare expression is evaluated without printing. Simple statements end at a newline or a closing brace; blocks can span lines. `--parse` prints statements as trees, including `(block ...)`, and `--eval` and the REPL still print top-level expression values. `unit name = value` creates a binding and `unit name` holds `void`; names are read inside expressions. Assignment updates an existing binding, returns the assigned value, and associates right to left. Assigning to an undeclared name is a runtime error (exit 70), while assigning to a non-name is a syntax error (exit 65). Redeclaring a name rebinds it in the current scope. Blocks create lexical scopes, allow shadowing, and restore the outer environment even after a runtime error. Lookup and assignment reach the nearest binding; block locals expire when the block ends. Global bindings persist between REPL lines. Missing closing braces report a syntax error, recovery preserves block boundaries, and nesting deep enough to overflow the JVM stack is rejected with exit 65 (the depth depends on the machine). |
-| Lab 5 | `if`/`else` and `while` added. `if` runs only the branch its condition picks; `else` is optional, may start on the next line, and binds to the nearest `if`. `while` checks its condition before every pass, so it can run zero times. Both use the Lab 3 truthiness rule, and a block body gets its own scope. Missing parentheses or bodies are syntax errors (exit 65), and `if`s and loops, like blocks, have no fixed nesting limit. `for (initializer, condition, increment)` added with comma-separated, optional clauses; the parser rewrites it into a block and a `while`, so the loop variable is scoped to the loop and shared by every pass. Calls added: `callee(arguments)`, chainable as `f()()`, at most 255 arguments, on one line. Calling a non-callable value or passing the wrong number of arguments is a runtime error (exit 70). `clock()` is the first native function. Protocol declarations and transmit added, with lexical environment capture, fresh parameter bindings per call, void results for bare or missing transmit, a 255-parameter limit, and escaping closures with independent state. Transmit outside a protocol is rejected before execution (exit 65). A protocol stack overflow is reported on the line of the outermost call. |
+| Lab 5 | `if`/`else` and `while` added. `if` runs only the branch its condition picks; `else` is optional, may start on the next line, and binds to the nearest `if`. `while` checks its condition before every pass, so it can run zero times. Both use the Lab 3 truthiness rule, and a block body gets its own scope. Missing parentheses or bodies are syntax errors (exit 65), and `if`s and loops, like blocks, have no fixed nesting limit. `for (initializer, condition, increment)` added with comma-separated, optional clauses; the parser rewrites it into a block and a `while`, so the loop variable is scoped to the loop and shared by every pass. Calls added: `callee(arguments)`, chainable as `f()()`, at most 255 arguments, on one line. Calling a non-callable value or passing the wrong number of arguments is a runtime error (exit 70). `clock()` is the first native function. Protocol declarations and transmit added, with lexical environment capture, fresh parameter bindings per call, void results for bare or missing transmit, a 255-parameter limit, and escaping closures with independent state. Transmit outside a protocol is rejected before execution (exit 65). A protocol stack overflow is reported on the line of the outermost call. Niche: `access_point`, `restore` and `hack` are keywords, and `hack expression` prints the expression, its grouping, numbered evaluation steps and the result. |
 

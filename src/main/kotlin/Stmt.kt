@@ -11,6 +11,9 @@ sealed class Stmt {
     // reportStmt -> "report" expression
     class Report(val expression: Expr) : Stmt()
 
+    // hackStmt -> "hack" expression
+    class Hack(val keyword: Token, val expression: Expr) : Stmt()
+
     // unitDecl -> "unit" IDENTIFIER ( "=" expression )?
     class Unit(val name: Token, val initializer: Expr?) : Stmt()
 }
