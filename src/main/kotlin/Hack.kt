@@ -7,7 +7,10 @@
 object Hack {
     fun run(expr: Expr) {
         println("[Pod 042] Hack: ${source(expr)}")
-        println("Grouping: ${AstPrinter.print(expr)}")
+        // The --parse tree, except strings are quoted and escaped like everywhere else in hack.
+        println("Grouping: ${AstPrinter.print(expr) { value ->
+            if (value is String) text(value) else AstPrinter.print(Expr.Literal(value))
+        }}")
         val trace = Trace()
         try {
             val result = trace.walk(expr).value
@@ -121,7 +124,17 @@ object Hack {
         is Expr.Assign -> "${expr.name.lexeme} = ${source(expr.value)}"
     }
 
-    // Values as report prints them, except strings keep their quotes so "1" and 1 differ.
+    // Values as report prints them, except strings are written back as Nier string
+    // literals: quoted, so "1" and 1 differ, and escaped, so a quote or newline inside
+    // the string cannot break the line.
     private fun text(value: Any?): String =
-        if (value is String) "\"$value\"" else Evaluator.stringify(value)
+        if (value is String) "\"${escape(value)}\"" else Evaluator.stringify(value)
+
+    // Undoes the scanner's four escapes. The backslash goes first so the backslashes
+    // added for the others are not doubled.
+    private fun escape(value: String): String = value
+        .replace("\\", "\\\\")
+        .replace("\"", "\\\"")
+        .replace("\n", "\\n")
+        .replace("\t", "\\t")
 }

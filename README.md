@@ -551,11 +551,16 @@ Result: active
 ```
 
 - `Hack:` is the expression written back out; `Grouping:` is its `--parse`
-  tree, so it shows which operator binds tighter.
+  tree, so it shows which operator binds tighter. One difference from
+  `--parse`: strings are shown quoted (see below).
 - Steps run innermost first. Each one shows the operation as written, then
   `->` and the same operation with names replaced by their values (left out
   when there are no names), then `=` and the result. A finished step's result
-  replaces it in the next step. Strings keep their quotes in steps.
+  replaces it in the next step.
+- Strings in the `Hack:`, `Grouping:` and step lines are written back as Nier
+  string literals, quoted and with `\"`, `\\`, `\n` and `\t` escaped again, so
+  `hack "a\"b" + "!"` shows `"a\"b" + "!"` and a newline inside a string
+  cannot split a line. `Result:` prints the value the way `report` does.
 - Each operation is passed back to the evaluator with its operands already
   computed, so `hack` follows the same rules and raises the same errors as
   normal evaluation. A runtime error prints the steps that worked, then the
@@ -890,7 +895,8 @@ The niche tools have their own `tests/niche` folder, inline like Lab 5:
 ```
 hack/          steps with names, grouping by parentheses, short-circuiting,
                a lone value, not, a call whose body reports, an assignment,
-               strings, and hack inside a loop
+               strings, escaped quotes, newlines, tabs and backslashes, and
+               hack inside a loop
 history/       recent and full history, silent saves, access point diffs,
                restore logging, and lookup across nested scopes
 errors/        a runtime error after some steps, an undefined first operand,
