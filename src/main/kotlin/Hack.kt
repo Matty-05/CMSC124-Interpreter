@@ -71,7 +71,7 @@ object Hack {
                 val name = expr.name.lexeme
                 val old = try { Evaluator.evaluate(Expr.Variable(expr.name)) } catch (_: RuntimeError) { null }
                 // Assigning to an undeclared name throws the normal assignment error here.
-                val result = Evaluator.evaluate(Expr.Assign(expr.name, Expr.Literal(value.value)))
+                val result = Evaluator.assign(expr, value.value)
                 steps += "${pair("$name = ${value.shown.written}", "$name = ${value.shown.value}")}" +
                     " ($name was ${text(old)}, now ${text(result)})"
                 plain(result)
@@ -113,7 +113,7 @@ object Hack {
     }
 
     // The expression written back out in infix form for the Hack: line.
-    private fun source(expr: Expr): String = when (expr) {
+    internal fun source(expr: Expr): String = when (expr) {
         is Expr.Literal -> text(expr.value)
         is Expr.Grouping -> "(${source(expr.expression)})"
         is Expr.Variable -> expr.name.lexeme
@@ -127,7 +127,7 @@ object Hack {
     // Values as report prints them, except strings are written back as Nier string
     // literals: quoted, so "1" and 1 differ, and escaped, so a quote or newline inside
     // the string cannot break the line.
-    private fun text(value: Any?): String =
+    internal fun text(value: Any?): String =
         if (value is String) "\"${escape(value)}\"" else Evaluator.stringify(value)
 
     // Undoes the scanner's four escapes. The backslash goes first so the backslashes

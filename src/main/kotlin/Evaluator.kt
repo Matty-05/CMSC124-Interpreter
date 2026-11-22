@@ -15,7 +15,7 @@ object Evaluator {
 
     fun execute(stmt: Stmt) {
         when (stmt) {
-            is Stmt.Protocol -> environment.define(stmt.name.lexeme, NierProtocol(stmt, environment))
+            is Stmt.Protocol -> environment.define(stmt.name.lexeme, NierProtocol(stmt, environment), stmt.name)
             is Stmt.Transmit -> throw Return(stmt.value?.let(::evaluate))
             is Stmt.If -> {
                 if (isTruthy(evaluate(stmt.condition))) execute(stmt.thenBranch)
@@ -28,22 +28,42 @@ object Evaluator {
             is Stmt.Report -> println(stringify(evaluate(stmt.expression)))
             is Stmt.Hack -> Hack.run(stmt.expression)
             is Stmt.Scan -> {
-                val changes = if (stmt.target.type == TokenType.STRING) {
-                    environment.changesSinceAccessPoint(stmt.target)
-                } else environment.unitHistory(stmt.target, stmt.all)
-                changes.forEach(::printChange)
+                if (stmt.target.type == TokenType.STRING) {
+                    val scan = environment.changesSinceAccessPoint(stmt.target)
+                    if (scan.truncated) println("[Pod 042] Some changes since ${stmt.target.lexeme} are no longer retained.")
+                    scan.changes.forEach(::printChange)
+                } else {
+                    val scan = environment.scanUnit(stmt.target, stmt.all)
+                    println("[Pod 042] Scan: ${stmt.target.lexeme} = ${Hack.text(scan.value)}")
+                    scan.changes.forEach { change ->
+                        println("line ${change.line}: ${display(change.after)} (${describe(change)})")
+                    }
+                }
             }
             is Stmt.AccessPoint -> environment.saveAccessPoint(stmt.name.literal as String)
-            is Stmt.Restore -> environment.restoreAccessPoint(stmt.name).forEach(::printChange)
+            is Stmt.Restore -> {
+                val changes = environment.restoreAccessPoint(stmt.name)
+                println("[Pod 042] Restoring ${stmt.name.lexeme}:")
+                changes.forEach(::printChange)
+            }
             // A unit with no value holds void.
-            is Stmt.Unit -> environment.defineUnit(stmt.name.lexeme, stmt.initializer?.let { evaluate(it) })
+            is Stmt.Unit -> environment.defineUnit(stmt.name, stmt.initializer?.let(::evaluate), stmt.initializer)
         }
     }
 
+    private fun display(value: Environment.UnitValue?): String =
+        if (value == null) "<undefined>" else Hack.text(value.value)
+
+    private fun describe(change: Environment.Change): String =
+        change.description ?: change.expression?.let(Hack::source) ?: "void"
+
     private fun printChange(change: Environment.Change) {
-        fun display(value: Environment.UnitValue?): String =
-            if (value == null) "<undefined>" else stringify(value.value)
         println("[Pod 042] ${change.name}: ${display(change.before)} -> ${display(change.after)}")
+    }
+
+    internal fun assign(expr: Expr.Assign, value: Any?): Any? {
+        environment.assign(expr.name, value, expr.value)
+        return value
     }
 
     fun executeBlock(statements: List<Stmt>, scope: Environment) {
@@ -60,11 +80,7 @@ object Evaluator {
         is Expr.Literal -> expr.value
         is Expr.Grouping -> evaluate(expr.expression)
         is Expr.Variable -> environment.get(expr.name)
-        is Expr.Assign -> {
-            val value = evaluate(expr.value)
-            environment.assign(expr.name, value)
-            value
-        }
+        is Expr.Assign -> assign(expr, evaluate(expr.value))
         is Expr.Call -> {
             val callee = evaluate(expr.callee)
             val arguments = expr.arguments.map(::evaluate)
