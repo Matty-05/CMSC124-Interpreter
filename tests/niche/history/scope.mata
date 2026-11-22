@@ -13,6 +13,7 @@ unit hp = 100
         # expect: [Pod 042] hp: 40 -> 30
         # expect: [Pod 042] armor: 5 -> 0
         restore "training"
+        # expect: [Pod 042] Restoring "training":
         # expect: [Pod 042] hp: 30 -> 40
         # expect: [Pod 042] armor: 0 -> 5
         # expect: [Pod 042] pod: 1 -> <undefined>
