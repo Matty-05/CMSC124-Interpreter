@@ -580,30 +580,39 @@ Result: active
 
 ### Unit history and access points
 
-`scan hp` prints the latest five changes to the nearest `hp` unit, in the
-order they happened. `scan all hp` prints its full history. Creation counts as
-a change, and writing the same value does not. `all` is contextual, so
-`scan all` still works for a unit named `all`.
+`scan hp` prints `[Pod 042] Scan: hp = value` followed by the latest five
+changes to the nearest `hp` unit, oldest first. Each entry shows the source
+line, resulting value, and expression that produced it. `scan all hp` prints
+all retained changes, up to 100 per unit in each scope. Creation counts as a
+change, and writing the same value does not. `all` is contextual, so `scan all`
+still works for a unit named `all`. Scanning a protocol parameter or another
+name that does not resolve to a unit raises `Undefined unit 'amount'.` (exit 70).
 
 ```text
 unit hp = 100
 access_point "ready"
 hp = 60
+scan hp
 scan "ready"
 restore "ready"
 ```
 
 ```text
+[Pod 042] Scan: hp = 60
+line 1: 100 (100)
+line 3: 60 (60)
 [Pod 042] hp: 100 -> 60
+[Pod 042] Restoring "ready":
 [Pod 042] hp: 60 -> 100
 ```
 
-`access_point "ready"` saves silently. `scan "ready"` lists changes since
-the save without undoing them. `restore "ready"` restores saved unit values,
-removes units created after the save, and records each resulting change in
-history. A removal prints `<undefined>`, which differs from the value `void`.
-A scan or restore with no changes prints nothing. A missing access point is a
-runtime error with exit 70, for example `Access point "missing" not found.`
+`access_point "ready"` saves silently. `scan "ready"` lists retained changes
+since the save and prints a notice if older entries have been discarded.
+`restore "ready"` prints its header even when there is nothing to change. It
+restores saved unit values, removes units created after the save, and records
+each resulting change with the restore line. A removal prints `<undefined>`,
+which differs from `void`. A missing access point is a runtime error with
+exit 70, for example `Access point "missing" not found.`
 
 Access point names follow lexical scope. A save captures units in the current
 and enclosing scopes. A restore only affects those scopes, so a local unit
@@ -969,9 +978,10 @@ We decided that string cannot span multiple lines since according to lab manual,
 We decided not to allow leading or trailing dot so it can act as its own independent DOT token in other contexts. Our number() function only treats . as part of the number when a digit immediately follows it.
 
 - `scan` for state inspection
-`scan` shows how a unit's value changed during a simulation. Each line names
-the unit and displays its old and new values, making changes easier to follow
-when several units are involved.
+The Lab 1 design gave `scan` a purpose like Rust's `dbg!` macro or Python's
+`f"{x=}"`: label the value so it is clear which unit produced it. That helps
+when several units are involved and `report` prints only their values. Lab 5
+adds a history of the source lines and expressions that changed each unit.
 
 - Underscores as digit separators
 Long numbers are hard to read at a glance, since 1000000 and 10000000 look almost the same. Java, Kotlin, Python, and Rust all added separators for this reason so we did the same. We require every separator to have a digit on both sides, so 1_000_, 1__000, and 1_.5 are all errors. A separator that divides nothing is almost certainly a typo, and accepting it silently would hide the mistake. Checking both sides rather than just the end also keeps the scanner honest against its own documentation, since a rule written as "between digits" should be the rule the code enforces. We left leading underscores alone since _1000 already scans as an identifier, and overriding that would mean special casing a rule we already have.
@@ -1002,8 +1012,9 @@ Nier already ends statements with a newline instead of a semicolon, so we made `
 - Block comments are not supported, so every commented line needs its own `#`.
 - Diagnostics report a line number but no column, so a line with two problems
   points at the line twice.
-- Unit history is retained while its environment is live. Limiting `scan`
-  to five entries limits output only.
+- Each scope keeps at most 100 history entries per unit name. Access points
+  retain their saved values separately, so older entries can expire without
+  affecting restoration.
 - Digit separators are stripped when the literal is built, so `1_000_000` and
   `1000000` differ only in their lexeme.
 - Identifier start characters are documented as ASCII letters, but the scanner
