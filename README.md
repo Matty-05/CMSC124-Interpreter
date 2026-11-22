@@ -909,6 +909,33 @@ HP after normal hit:
 55
 ```
 
+### Runnable example: combat protocols
+
+Run `./run examples/combat-protocol.mata` to simulate a shielded hit followed
+by a normal hit. `damageFor` returns the damage for each hit. `makeCounter`
+returns a protocol that remembers its own hit count, and `simulate` uses a
+`for` loop to apply the hits and report the remaining HP. The replay starts
+at hit 1 and 100 HP because each trial creates its own counter and HP binding.
+
+Expected output:
+
+```text
+Primary trial
+Hit:
+1
+Remaining HP:
+85
+Hit:
+2
+Remaining HP:
+55
+Replay trial
+Hit:
+1
+Remaining HP:
+85
+```
+
 ## Design rationale
 
 - Braces over indentation
