@@ -241,6 +241,13 @@ class Parser(private val tokens: List<Token>) {
         if (match(TokenType.LEFT_BRACE)) return block()
         if (match(TokenType.REPORT)) return reportStmt()
         if (match(TokenType.HACK)) return hackStmt()
+        if (match(TokenType.SCAN)) return scanStmt()
+        if (match(TokenType.ACCESS_POINT)) {
+            return Stmt.AccessPoint(consume(TokenType.STRING, "Expect access point name as a string."))
+        }
+        if (match(TokenType.RESTORE)) {
+            return Stmt.Restore(consume(TokenType.STRING, "Expect access point name as a string."))
+        }
         return Stmt.Expression(expression())
     }
 
@@ -255,6 +262,14 @@ class Parser(private val tokens: List<Token>) {
 
     // hackStmt → "hack" expression
     private fun hackStmt(): Stmt = Stmt.Hack(previous(), expression())
+
+    private fun scanStmt(): Stmt.Scan {
+        if (match(TokenType.STRING)) return Stmt.Scan(previous())
+        val name = consume(TokenType.IDENTIFIER, "Expect unit name or access point string after 'scan'.")
+        // 'all' is contextual, so 'scan all' can still refer to a unit named all.
+        if (name.lexeme == "all" && match(TokenType.IDENTIFIER)) return Stmt.Scan(previous(), all = true)
+        return Stmt.Scan(name)
+    }
 
     // transmitStmt → "transmit" expression?
     private fun transmitStmt(): Stmt.Transmit {

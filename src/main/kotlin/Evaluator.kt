@@ -27,9 +27,23 @@ object Evaluator {
             is Stmt.Expression -> evaluate(stmt.expression)
             is Stmt.Report -> println(stringify(evaluate(stmt.expression)))
             is Stmt.Hack -> Hack.run(stmt.expression)
+            is Stmt.Scan -> {
+                val changes = if (stmt.target.type == TokenType.STRING) {
+                    environment.changesSinceAccessPoint(stmt.target)
+                } else environment.unitHistory(stmt.target, stmt.all)
+                changes.forEach(::printChange)
+            }
+            is Stmt.AccessPoint -> environment.saveAccessPoint(stmt.name.literal as String)
+            is Stmt.Restore -> environment.restoreAccessPoint(stmt.name).forEach(::printChange)
             // A unit with no value holds void.
-            is Stmt.Unit -> environment.define(stmt.name.lexeme, stmt.initializer?.let { evaluate(it) })
+            is Stmt.Unit -> environment.defineUnit(stmt.name.lexeme, stmt.initializer?.let { evaluate(it) })
         }
+    }
+
+    private fun printChange(change: Environment.Change) {
+        fun display(value: Environment.UnitValue?): String =
+            if (value == null) "<undefined>" else stringify(value.value)
+        println("[Pod 042] ${change.name}: ${display(change.before)} -> ${display(change.after)}")
     }
 
     fun executeBlock(statements: List<Stmt>, scope: Environment) {

@@ -8,6 +8,9 @@ object AstPrinter {
         is Stmt.Expression -> print(stmt.expression)
         is Stmt.Report -> "(report ${print(stmt.expression)})"
         is Stmt.Hack -> "(hack ${print(stmt.expression)})"
+        is Stmt.Scan -> "(scan ${if (stmt.all) "all " else ""}${stmt.target.lexeme})"
+        is Stmt.AccessPoint -> "(access_point ${stmt.name.lexeme})"
+        is Stmt.Restore -> "(restore ${stmt.name.lexeme})"
         is Stmt.Unit -> stmt.initializer?.let { "(unit ${stmt.name.lexeme} ${print(it)})" } ?: "(unit ${stmt.name.lexeme})"
     }
 
