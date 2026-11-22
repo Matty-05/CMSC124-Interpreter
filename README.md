@@ -20,7 +20,7 @@ Nier is a programming language designed for YoRHa androids and other operators w
 
 | Command | What it does |
 |---|---|
-| `./run <file>` | Runs a program: executes its statements in order. Only `report` statements print. |
+| `./run <file>` | Runs a program and prints the output produced by its statements. |
 | `./run --tokenize <file>` | Prints the token stream. |
 | `./run --parse <file>` | Parses the program and prints each top-level statement's tree. |
 | `./run --eval <file>` | Runs statements and prints top-level expression values, as in Lab 3. |
@@ -52,9 +52,9 @@ Exit codes: 0 when the file scans (and, with `--parse`, parses) cleanly, 65 when
 | `and` | Logical conjunction |
 | `or` | Logical disjunction |
 | `not` | Logical negation |
-| `scan` | Prints a variable's name and value together |
-| `access_point` | Saves every unit's value under a name (niche; parsing and behavior still to come) |
-| `restore` | Puts the values saved by an `access_point` back (niche; parsing and behavior still to come) |
+| `scan` | Shows a unit's value history or changes since an access point |
+| `access_point` | Saves unit bindings under a name |
+| `restore` | Restores saved unit bindings and reports what changed |
 | `hack` | Shows how an expression got its result, step by step (niche) |
 
 Every word here is a word a user cannot use as a variable name, so the list is
@@ -187,6 +187,9 @@ statement   → ifStmt
             | transmitStmt
             | reportStmt
             | hackStmt
+            | scanStmt
+            | accessPointStmt
+            | restoreStmt
             | exprStmt ;
 ifStmt      → "if" "(" expression ")" statement ( "else" statement )? ;
 whileStmt   → "while" "(" expression ")" statement ;
@@ -195,6 +198,9 @@ forStmt     → "for" "(" ( unitDecl | expression )? ","
 block       → "{" declaration* "}" ;
 reportStmt  → "report" expression ;
 hackStmt    → "hack" expression ;
+scanStmt    → "scan" ( IDENTIFIER | "all" IDENTIFIER | STRING ) ;
+accessPointStmt → "access_point" STRING ;
+restoreStmt → "restore" STRING ;
 transmitStmt → "transmit" expression? ;
 exprStmt    → expression ;
 expression  → assignment ;
@@ -236,9 +242,8 @@ the end of the body produces `void`. A transmit expression stays on its line;
 `transmit` outside a protocol is rejected before execution with
 `Can't transmit from outside a protocol.` (exit 65).
 
-A statement is an `if` statement, a `while` or `for` loop, a block, a
-`transmit` statement, a `report` statement, a `hack` statement, or an
-expression statement.
+A statement can be an `if`, a `while` or `for` loop, a block, a `transmit`,
+a `report`, a Pod tool command, or an expression.
 A block holds declarations between `{` and `}` and runs them in a new scope.
 `if (condition) statement else statement` runs only the branch the condition
 picks, using the truthiness rule from Lab 3; the `else` part is optional and may
@@ -284,10 +289,10 @@ prints:
 
 | Mode | Prints |
 |---|---|
-| `./run <file>` | only what `report` statements print |
-| `./run --eval <file>` | the value of each top-level expression statement, and whatever `report` prints |
+| `./run <file>` | output from `report` and the Pod tools |
+| `./run --eval <file>` | program output plus the value of each top-level expression statement |
 | `./run --parse <file>` | the tree of each statement |
-| REPL | what `report` prints, and the value of a bare expression |
+| REPL | program output plus the value of a bare expression |
 
 A Lab 2 or Lab 3 file holds only expressions, so `--parse` and `--eval` print
 exactly what they did before.
@@ -354,6 +359,8 @@ prefix form, wrapped in parentheses.
   `report 1 + 2` prints `(report (+ 1.0 2.0))`
 - `hack` statements print as: `(hack expression)`, e.g. `hack 1 + 2` prints
   `(hack (+ 1.0 2.0))`
+- Unit history commands print as `(scan hp)`, `(scan all hp)`,
+  `(scan "ready")`, `(access_point "ready")`, or `(restore "ready")`.
 - `unit` declarations print as: `(unit name value)`, or `(unit name)` with no
   value, e.g. `unit hp = 100` prints `(unit hp 100.0)`
 - Names print as: the name itself, e.g. `hp`
@@ -404,11 +411,9 @@ booleans print as `true` and `false`.
 
 ### Output
 
-A program's only output is what its `report` statements print, one value per
-line, in the order they run. A bare expression on its own line is evaluated but
-prints nothing when a file is run, so a program shows only what it chooses to
-report. `--eval` and the REPL still print each bare expression's value, since
-showing values is their purpose. Diagnostics always go to stderr.
+`report` prints one value per line. The Pod tools also write trace or history
+output. A bare expression is evaluated silently in normal file mode. `--eval`
+and the REPL print top-level bare expression values. Diagnostics go to stderr.
 
 ### Truthiness
 
@@ -567,6 +572,41 @@ Result: active
 - `hack` is a statement, so it works in blocks, loops and protocols, and in
   the REPL. Like `report`, its expression starts on the same line.
 - Step lines have no indent because the test harness strips expected lines.
+
+### Unit history and access points
+
+`scan hp` prints the latest five changes to the nearest `hp` unit, in the
+order they happened. `scan all hp` prints its full history. Creation counts as
+a change, and writing the same value does not. `all` is contextual, so
+`scan all` still works for a unit named `all`.
+
+```text
+unit hp = 100
+access_point "ready"
+hp = 60
+scan "ready"
+restore "ready"
+```
+
+```text
+[Pod 042] hp: 100 -> 60
+[Pod 042] hp: 60 -> 100
+```
+
+`access_point "ready"` saves silently. `scan "ready"` lists changes since
+the save without undoing them. `restore "ready"` restores saved unit values,
+removes units created after the save, and records each resulting change in
+history. A removal prints `<undefined>`, which differs from the value `void`.
+A scan or restore with no changes prints nothing. A missing access point is a
+runtime error with exit 70, for example `Access point "missing" not found.`
+
+Access point names follow lexical scope. A save captures units in the current
+and enclosing scopes. A restore only affects those scopes, so a local unit
+in a deeper block stays untouched when restoring a save from an outer block.
+Saving the same name again in the same scope replaces that checkpoint.
+Protocol declarations, parameters, and native bindings are outside the snapshot.
+Callable values stored in units are saved by reference, so restoring a unit
+does not rewind hidden state inside a closure.
 
 ## Native functions
 
@@ -851,6 +891,8 @@ The niche tools have their own `tests/niche` folder, inline like Lab 5:
 hack/          steps with names, grouping by parentheses, short-circuiting,
                a lone value, not, a call whose body reports, an assignment,
                strings, and hack inside a loop
+history/       recent and full history, silent saves, access point diffs,
+               restore logging, and lookup across nested scopes
 errors/        a runtime error after some steps, an undefined first operand,
                a missing expression or one on the next line, and the new
                keywords used as unit names
@@ -920,8 +962,10 @@ We decided that string cannot span multiple lines since according to lab manual,
 - No leading or trailing dot number
 We decided not to allow leading or trailing dot so it can act as its own independent DOT token in other contexts. Our number() function only treats . as part of the number when a digit immediately follows it.
 
-- 'scan' for state inspection
-Nier's stated purpose is testing combat protocols safely, and safe testing means being able to see what a variable holds without guessing. 'report' only shows a value, not which variable produced it, which gets confusing once several units are being inspected at once. 'scan' prints the name and value together, so the output is self-labeling. Most languages bolt this on well after launch, like Rust's dbg! macro or Python's f"{x=}", so we built it in from Lab 1 since inspection is central to what Nier is for.
+- `scan` for state inspection
+`scan` shows how a unit's value changed during a simulation. Each line names
+the unit and displays its old and new values, making changes easier to follow
+when several units are involved.
 
 - Underscores as digit separators
 Long numbers are hard to read at a glance, since 1000000 and 10000000 look almost the same. Java, Kotlin, Python, and Rust all added separators for this reason so we did the same. We require every separator to have a digit on both sides, so 1_000_, 1__000, and 1_.5 are all errors. A separator that divides nothing is almost certainly a typo, and accepting it silently would hide the mistake. Checking both sides rather than just the end also keeps the scanner honest against its own documentation, since a rule written as "between digits" should be the rule the code enforces. We left leading underscores alone since _1000 already scans as an identifier, and overriding that would mean special casing a rule we already have.
@@ -952,8 +996,8 @@ Nier already ends statements with a newline instead of a semicolon, so we made `
 - Block comments are not supported, so every commented line needs its own `#`.
 - Diagnostics report a line number but no column, so a line with two problems
   points at the line twice.
-- `scan` has its own token type and is recognized by the scanner, but it has no
-  runtime behavior until Lab 3.
+- Unit history is retained while its environment is live. Limiting `scan`
+  to five entries limits output only.
 - Digit separators are stripped when the literal is built, so `1_000_000` and
   `1000000` differ only in their lexeme.
 - Identifier start characters are documented as ASCII letters, but the scanner
@@ -988,5 +1032,5 @@ Nier already ends statements with a newline instead of a semicolon, so we made `
 | Lab 2 | Expression grammar added, loosest to tightest: `or`, `and`, `== !=`, `< <= > >=`, `+ -`, `* /`, then prefix `not` and `-`, then literals and parenthesized groups. Every binary operator is left-associative. `--parse` prints one prefix-form tree per line. One expression per line, and an expression cannot span lines. A file with no expressions is rejected. The parser reads the whole file and recovers at the next line after an error, so every bad line is reported. The REPL prints each line's parsed tree. Assignment and identifiers are not parsed yet. |
 | Lab 3 | Expressions now evaluate with `--eval`, and the REPL prints values. Values are numbers, strings, `active`/`inactive`, and `void`. `inactive` and `void` are false and everything else is true. `+` adds two numbers or joins two strings; arithmetic and comparison need numbers; equality works on any two values, and different types are never equal. `and` and `or` short-circuit. Division by zero is a runtime error. Runtime errors exit 70. Numbers print without a trailing `.0` and booleans print as `active` and `inactive`. |
 | Lab 4 | Programs run with plain `./run <file>`. `report <expression>` prints a value, and a bare expression is evaluated without printing. Simple statements end at a newline or a closing brace; blocks can span lines. `--parse` prints statements as trees, including `(block ...)`, and `--eval` and the REPL still print top-level expression values. `unit name = value` creates a binding and `unit name` holds `void`; names are read inside expressions. Assignment updates an existing binding, returns the assigned value, and associates right to left. Assigning to an undeclared name is a runtime error (exit 70), while assigning to a non-name is a syntax error (exit 65). Redeclaring a name rebinds it in the current scope. Blocks create lexical scopes, allow shadowing, and restore the outer environment even after a runtime error. Lookup and assignment reach the nearest binding; block locals expire when the block ends. Global bindings persist between REPL lines. Missing closing braces report a syntax error, recovery preserves block boundaries, and nesting deep enough to overflow the JVM stack is rejected with exit 65 (the depth depends on the machine). |
-| Lab 5 | `if`/`else` and `while` added. `if` runs only the branch its condition picks; `else` is optional, may start on the next line, and binds to the nearest `if`. `while` checks its condition before every pass, so it can run zero times. Both use the Lab 3 truthiness rule, and a block body gets its own scope. Missing parentheses or bodies are syntax errors (exit 65), and `if`s and loops, like blocks, have no fixed nesting limit. `for (initializer, condition, increment)` added with comma-separated, optional clauses; the parser rewrites it into a block and a `while`, so the loop variable is scoped to the loop and shared by every pass. Calls added: `callee(arguments)`, chainable as `f()()`, at most 255 arguments, on one line. Calling a non-callable value or passing the wrong number of arguments is a runtime error (exit 70). `clock()` is the first native function. Protocol declarations and transmit added, with lexical environment capture, fresh parameter bindings per call, void results for bare or missing transmit, a 255-parameter limit, and escaping closures with independent state. Transmit outside a protocol is rejected before execution (exit 65). A protocol stack overflow is reported on the line of the outermost call. Niche: `access_point`, `restore` and `hack` are keywords, and `hack expression` prints the expression, its grouping, numbered evaluation steps and the result. |
+| Lab 5 | `if`/`else` and `while` added. `if` runs only the branch its condition picks; `else` is optional, may start on the next line, and binds to the nearest `if`. `while` checks its condition before every pass, so it can run zero times. Both use the Lab 3 truthiness rule, and a block body gets its own scope. Missing parentheses or bodies are syntax errors (exit 65), and `if`s and loops, like blocks, have no fixed nesting limit. `for (initializer, condition, increment)` added with comma-separated, optional clauses; the parser rewrites it into a block and a `while`, so the loop variable is scoped to the loop and shared by every pass. Calls added: `callee(arguments)`, chainable as `f()()`, at most 255 arguments, on one line. Calling a non-callable value or passing the wrong number of arguments is a runtime error (exit 70). `clock()` is the first native function. Protocol declarations and transmit added, with lexical environment capture, fresh parameter bindings per call, void results for bare or missing transmit, a 255-parameter limit, and escaping closures with independent state. Transmit outside a protocol is rejected before execution (exit 65). A protocol stack overflow is reported on the line of the outermost call. Niche: `access_point`, `restore` and `hack` are keywords, and `hack expression` prints the expression, its grouping, numbered evaluation steps and the result. Unit history is available through `scan`; `access_point` saves unit state and `restore` rolls it back while recording the changes. |
 
