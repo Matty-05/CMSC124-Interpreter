@@ -61,16 +61,20 @@ fun runParseFile(path: String) {
     exitProcess(0)
 }
 
+private fun parseExecutableFile(path: String): Program = try {
+    val tokens = Scanner(readSource(path)).scanTokens()
+    Environment.recordHistory = tokens.any { it.type == TokenType.SCAN }
+    Parser(tokens).parse()
+} catch (e: Scanner.ScanError) {
+    System.err.println(e.message)
+    exitProcess(65)
+} catch (e: Parser.ParseError) {
+    System.err.println(e.message)
+    exitProcess(65)
+}
+
 fun runEvalFile(path: String) {
-    val program = try {
-        Parser(Scanner(readSource(path)).scanTokens()).parse()
-    } catch (e: Scanner.ScanError) {
-        System.err.println(e.message)
-        exitProcess(65)
-    } catch (e: Parser.ParseError) {
-        System.err.println(e.message)
-        exitProcess(65)
-    }
+    val program = parseExecutableFile(path)
 
     for (stmt in program.statements) {
         try {
@@ -89,15 +93,7 @@ fun runEvalFile(path: String) {
 }
 
 fun runProgram(path: String) {
-    val program = try {
-        Parser(Scanner(readSource(path)).scanTokens()).parse()
-    } catch (e: Scanner.ScanError) {
-        System.err.println(e.message)
-        exitProcess(65)
-    } catch (e: Parser.ParseError) {
-        System.err.println(e.message)
-        exitProcess(65)
-    }
+    val program = parseExecutableFile(path)
 
     for (stmt in program.statements) {
         try {
@@ -113,6 +109,7 @@ fun runProgram(path: String) {
 }
 
 fun runPrompt() {
+    Environment.recordHistory = true
     while (true) {
         print("> ")
         val line = try {
@@ -153,6 +150,9 @@ private fun statementLine(stmt: Stmt): Int = when (stmt) {
     is Stmt.Expression -> expressionLine(stmt.expression)
     is Stmt.Report -> expressionLine(stmt.expression)
     is Stmt.Hack -> stmt.keyword.line
+    is Stmt.Scan -> stmt.target.line
+    is Stmt.AccessPoint -> stmt.name.line
+    is Stmt.Restore -> stmt.name.line
     is Stmt.Unit -> stmt.name.line
 }
 

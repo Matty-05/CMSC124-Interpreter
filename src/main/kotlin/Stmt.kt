@@ -13,6 +13,9 @@ sealed class Stmt {
 
     // hackStmt -> "hack" expression
     class Hack(val keyword: Token, val expression: Expr) : Stmt()
+    class Scan(val target: Token, val all: Boolean = false) : Stmt()
+    class AccessPoint(val name: Token) : Stmt()
+    class Restore(val name: Token) : Stmt()
 
     // unitDecl -> "unit" IDENTIFIER ( "=" expression )?
     class Unit(val name: Token, val initializer: Expr?) : Stmt()
