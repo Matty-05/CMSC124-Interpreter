@@ -1,18 +1,72 @@
 object Evaluator {
     // Current scope; the global environment persists between REPL lines.
-    private var environment = Environment()
+    val globals = Environment().apply {
+        // clock() → seconds since the Unix epoch, as a number
+        define("clock", object : NierCallable {
+            override fun arity(): Int = 0
+            override fun call(evaluator: Evaluator, arguments: List<Any?>): Any? =
+                System.currentTimeMillis() / 1000.0
+            override fun toString(): String = "<native clock>"
+        })
+    }
+    private var environment = globals
+    // True while the outermost call is running, so only that call handles a stack overflow.
+    private var callActive = false
 
     fun execute(stmt: Stmt) {
         when (stmt) {
+            is Stmt.Protocol -> environment.define(stmt.name.lexeme, NierProtocol(stmt, environment), stmt.name)
+            is Stmt.Transmit -> throw Return(stmt.value?.let(::evaluate))
+            is Stmt.If -> {
+                if (isTruthy(evaluate(stmt.condition))) execute(stmt.thenBranch)
+                else stmt.elseBranch?.let(::execute)
+            }
+            // The condition is checked again before every pass, so a false start runs the body zero times.
+            is Stmt.While -> while (isTruthy(evaluate(stmt.condition))) execute(stmt.body)
             is Stmt.Block -> executeBlock(stmt.statements, Environment(environment))
             is Stmt.Expression -> evaluate(stmt.expression)
             is Stmt.Report -> println(stringify(evaluate(stmt.expression)))
+            is Stmt.Hack -> Hack.run(stmt.expression)
+            is Stmt.Scan -> {
+                if (stmt.target.type == TokenType.STRING) {
+                    val scan = environment.changesSinceAccessPoint(stmt.target)
+                    if (scan.truncated) println("[Pod 042] Some changes since ${stmt.target.lexeme} are no longer retained.")
+                    scan.changes.forEach(::printChange)
+                } else {
+                    val scan = environment.scanUnit(stmt.target, stmt.all)
+                    println("[Pod 042] Scan: ${stmt.target.lexeme} = ${Hack.text(scan.value)}")
+                    scan.changes.forEach { change ->
+                        println("line ${change.line}: ${display(change.after)} (${describe(change)})")
+                    }
+                }
+            }
+            is Stmt.AccessPoint -> environment.saveAccessPoint(stmt.name.literal as String)
+            is Stmt.Restore -> {
+                val changes = environment.restoreAccessPoint(stmt.name)
+                println("[Pod 042] Restoring ${stmt.name.lexeme}:")
+                changes.forEach(::printChange)
+            }
             // A unit with no value holds void.
-            is Stmt.Unit -> environment.define(stmt.name.lexeme, stmt.initializer?.let { evaluate(it) })
+            is Stmt.Unit -> environment.defineUnit(stmt.name, stmt.initializer?.let(::evaluate), stmt.initializer)
         }
     }
 
-    private fun executeBlock(statements: List<Stmt>, scope: Environment) {
+    private fun display(value: Environment.UnitValue?): String =
+        if (value == null) "<undefined>" else Hack.text(value.value)
+
+    private fun describe(change: Environment.Change): String =
+        change.description ?: change.expression?.let(Hack::source) ?: "void"
+
+    private fun printChange(change: Environment.Change) {
+        println("[Pod 042] ${change.name}: ${display(change.before)} -> ${display(change.after)}")
+    }
+
+    internal fun assign(expr: Expr.Assign, value: Any?): Any? {
+        environment.assign(expr.name, value, expr.value)
+        return value
+    }
+
+    fun executeBlock(statements: List<Stmt>, scope: Environment) {
         val previous = environment
         try {
             environment = scope
@@ -26,10 +80,26 @@ object Evaluator {
         is Expr.Literal -> expr.value
         is Expr.Grouping -> evaluate(expr.expression)
         is Expr.Variable -> environment.get(expr.name)
-        is Expr.Assign -> {
-            val value = evaluate(expr.value)
-            environment.assign(expr.name, value)
-            value
+        is Expr.Assign -> assign(expr, evaluate(expr.value))
+        is Expr.Call -> {
+            val callee = evaluate(expr.callee)
+            val arguments = expr.arguments.map(::evaluate)
+            // Checked here once, so protocols and natives share the same two errors.
+            if (callee !is NierCallable) throw RuntimeError(expr.paren, "Can only call protocols.")
+            if (arguments.size != callee.arity()) {
+                throw RuntimeError(expr.paren, "Expected ${callee.arity()} arguments but got ${arguments.size}.")
+            }
+            if (callActive) callee.call(this, arguments)
+            else try {
+                callActive = true
+                callee.call(this, arguments)
+            } catch (_: StackOverflowError) {
+                // By now the stack has unwound to the outermost call, so the error points at
+                // the line that started the recursion, not where the protocol was declared.
+                throw RuntimeError(expr.paren, "Stack overflow: protocol calls nested too deeply.")
+            } finally {
+                callActive = false
+            }
         }
         is Expr.Unary -> {
             val right = evaluate(expr.right)
@@ -90,7 +160,7 @@ object Evaluator {
         throw RuntimeError(operator, "Operands must be numbers.")
     }
 
-    private fun isTruthy(value: Any?): Boolean = value != null && value != false
+    fun isTruthy(value: Any?): Boolean = value != null && value != false
 
     fun stringify(value: Any?): String = when (value) {
         null -> "void"

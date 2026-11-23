@@ -14,6 +14,9 @@ sealed class Expr {
     // primary → IDENTIFIER
     class Variable(val name: Token) : Expr()
 
+    // call → primary ( "(" arguments? ")" )* ; paren is the closing ")", kept for error lines
+    class Call(val callee: Expr, val paren: Token, val arguments: List<Expr>) : Expr()
+
     // assignment → IDENTIFIER "=" assignment
     class Assign(val name: Token, val value: Expr) : Expr()
 }

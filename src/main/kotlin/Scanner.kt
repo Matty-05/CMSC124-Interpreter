@@ -21,7 +21,10 @@ class Scanner(private val source: String) {
             "and" to TokenType.AND,
             "or" to TokenType.OR,
             "not" to TokenType.NOT,
-            "scan" to TokenType.SCAN
+            "scan" to TokenType.SCAN,
+            "access_point" to TokenType.ACCESS_POINT,
+            "restore" to TokenType.RESTORE,
+            "hack" to TokenType.HACK
         )
     }
 
