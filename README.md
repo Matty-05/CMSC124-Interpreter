@@ -588,6 +588,10 @@ change, and writing the same value does not. `all` is contextual, so `scan all`
 still works for a unit named `all`. Scanning a protocol parameter or another
 name that does not resolve to a unit raises `Undefined unit 'amount'.` (exit 70).
 
+File execution records history from the first statement if the file contains a
+`scan` command. The REPL always records history for future inputs. Access points
+and restores work independently of history recording.
+
 ```text
 unit hp = 100
 access_point "ready"
