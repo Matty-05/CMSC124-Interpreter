@@ -1,8 +1,9 @@
 // Holds the value bound to each unit name. A block's environment points to the
 // one around it, so lookup and assignment walk outward until they find the name.
 class Environment(private val enclosing: Environment? = null) {
-    private companion object {
-        const val HISTORY_LIMIT = 100
+    companion object {
+        private const val HISTORY_LIMIT = 100
+        internal var recordHistory = true
     }
 
     private data class Binding(val value: Any?, val isUnit: Boolean)
@@ -82,7 +83,8 @@ class Environment(private val enclosing: Environment? = null) {
             val scope = saved.environment
             val names = scope.values.filterValues { it.isUnit }.keys + saved.units.keys
             for (unit in names) {
-                scope.write(unit, saved.units[unit], name.line, description = "restore ${name.lexeme}")?.let(::add)
+                scope.write(unit, saved.units[unit], name.line, description = "restore ${name.lexeme}",
+                    reportChange = true)?.let(::add)
             }
         }
     }
@@ -94,12 +96,14 @@ class Environment(private val enclosing: Environment? = null) {
     }
 
     private fun write(name: String, binding: Binding?, line: Int, expression: Expr? = null,
-                      description: String? = null): Change? {
+                      description: String? = null, reportChange: Boolean = false): Change? {
         val previous = if (binding == null) values.remove(name) else values.put(name, binding)
+        if (!recordHistory && !reportChange) return null
         val before = previous?.takeIf { it.isUnit }?.let { UnitValue(it.value) }
         val after = binding?.takeIf { it.isUnit }?.let { UnitValue(it.value) }
         if (before == after) return null
         val change = Change(name, before, after, line, expression, description)
+        if (!recordHistory) return change
         val log = history ?: mutableMapOf<String, ArrayDeque<Entry>>().also { history = it }
         val entries = log.getOrPut(name) { ArrayDeque() }
         if (entries.size == HISTORY_LIMIT) {
